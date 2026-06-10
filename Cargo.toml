@@ -1,0 +1,65 @@
+[package]
+name        = "subscrub"
+version     = "0.1.0"
+edition     = "2021"
+description = "Download & clean YouTube subtitles"
+license     = "GPL-3.0-or-later"
+authors     = ["AbuKaram01"]
+repository  = "https://github.com/AbuKaram01/subget"
+readme      = "README.md"
+
+[lib]
+name = "subscrub"
+path = "src/lib.rs"
+
+[[bin]]
+name = "subscrub"
+path = "src/main.rs"
+
+[dependencies]
+clap        = { version = "4", features = ["derive"] }
+console     = "0.15"
+dirs        = "5"
+encoding_rs = "0.8"
+glob        = "0.3"
+indicatif   = "0.17"
+inquire     = "0.7"
+regex       = "1"
+serde_json  = "1"
+
+# ── release optimizations ─────────────────────────────────────────────────────
+[profile.release]
+opt-level     = 3
+lto           = true
+codegen-units = 1
+strip         = true
+panic         = "abort"
+
+# ── .deb (cargo-deb) ──────────────────────────────────────────────────────────
+[package.metadata.deb]
+name               = "subscrub"
+maintainer         = "AbuKaram01"
+copyright          = "2026, AbuKaram01"
+license-file       = "LICENSE"
+extended-description = """\
+A fast CLI tool to download and clean YouTube subtitles.
+Supports VTT and SRT output, playlists, multiple languages,
+subtitle merging into videos via ffmpeg, and both interactive
+and scripting modes."""
+depends            = "$auto, yt-dlp, ffmpeg"
+section            = "utils"
+priority           = "optional"
+assets = [
+    ["target/release/subscrub", "usr/bin/", "755"],
+]
+
+# ── .rpm (cargo-generate-rpm) ─────────────────────────────────────────────────
+[package.metadata.generate-rpm]
+release = "1"
+assets = [
+    { source = "target/release/subscrub", dest = "/usr/bin/subscrub", mode = "755" },
+]
+
+[package.metadata.generate-rpm.requires]
+yt-dlp = "*"
+ffmpeg = "*"
