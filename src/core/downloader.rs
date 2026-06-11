@@ -51,7 +51,7 @@ fn is_installed(exe: &str) -> bool {
 pub fn require_yt_dlp() {
     if is_installed("yt-dlp") { return; }
     eprintln!();
-    eprintln!("  [1;31m✗[0m  yt-dlp not found");
+    eprintln!("  [1;31m✗[0m  yt-dlp not found");
     eprintln!();
     eprintln!("     subscrub requires yt-dlp to download subtitles.");
     eprintln!("     Install it with one of:");
@@ -69,7 +69,7 @@ pub fn require_yt_dlp() {
 pub fn require_ffmpeg() {
     if is_installed("ffmpeg") { return; }
     eprintln!();
-    eprintln!("  [1;31m✗[0m  ffmpeg not found");
+    eprintln!("  [1;31m✗[0m  ffmpeg not found");
     eprintln!();
     eprintln!("     subscrub requires ffmpeg to embed subtitles into videos.");
     eprintln!("     Install it with one of:");
@@ -120,28 +120,54 @@ fn clean_filename(raw: &str) -> String {
     if clean.is_empty() { "untitled".to_string() } else { clean }
 }
 
-pub fn get_video_title(url: &str, browser: &str) -> String {
-    let result = Command::new("yt-dlp")
-        .args([
-            "--get-title",
-            "--no-check-certificates",
-            "--sleep-requests",       "2",
-            "--cookies-from-browser", browser,
-            url,
-        ])
-        .stderr(Stdio::null())
-        .output();
-
-    match result {
-        Ok(out) if out.status.success() => {
-            clean_filename(String::from_utf8_lossy(&out.stdout).trim())
-        }
-        Err(e) => {
-            eprintln!("  [warn] Could not fetch title ({e}); using 'subtitles'.");
-            "subtitles".to_string()
-        }
-        _ => "subtitles".to_string(),
+/// Builds a yt-dlp `Command` from `base_args`, optionally appending
+/// `--cookies-from-browser <browser>`, then the URL.
+/// Centralises the "try without cookies, fall back with cookies" pattern.
+fn build_yt_dlp(base_args: &[&str], browser: Option<&str>, url: &str) -> Command {
+    let mut cmd = Command::new("yt-dlp");
+    cmd.args(base_args);
+    if let Some(b) = browser {
+        cmd.args(["--cookies-from-browser", b]);
     }
+    cmd.arg(url);
+    cmd.stderr(Stdio::null());
+    cmd
+}
+
+/// Returns `Some(browser)` only when the string is non-empty.
+fn opt_browser(browser: &str) -> Option<&str> {
+    if browser.is_empty() { None } else { Some(browser) }
+}
+
+
+// ── video title ───────────────────────────────────────────────────────────────
+
+/// Inner helper: try to get the video title with or without cookies.
+/// Returns `None` when yt-dlp fails or produces an empty title.
+fn try_get_title(url: &str, browser: Option<&str>) -> Option<String> {
+    let output = build_yt_dlp(
+        &["--get-title", "--no-check-certificates", "--sleep-requests", "2"],
+        browser,
+        url,
+    )
+    .output()
+    .ok()?;
+
+    if !output.status.success() { return None; }
+    let title = clean_filename(String::from_utf8_lossy(&output.stdout).trim());
+    if title.is_empty() { None } else { Some(title) }
+}
+
+pub fn get_video_title(url: &str, browser: &str) -> String {
+    // Try without cookies first — works for public videos on headless environments
+    // (e.g. VMs without a browser profile/session).
+    if let Some(t) = try_get_title(url, None) { return t; }
+
+    // Fall back to cookies if a browser was detected.
+    if let Some(t) = try_get_title(url, opt_browser(browser)) { return t; }
+
+    eprintln!("  [warn] Could not fetch title; using 'subtitles'.");
+    "subtitles".to_string()
 }
 
 
@@ -151,18 +177,14 @@ pub fn is_playlist_url(url: &str) -> bool {
     url.contains("list=") || url.contains("/playlist")
 }
 
-/// Fetches playlist metadata (title + video list) via yt-dlp.
-pub fn fetch_playlist(url: &str, browser: &str) -> Result<Playlist, Box<dyn std::error::Error>> {
-    let output = Command::new("yt-dlp")
-        .args([
-            "--flat-playlist",
-            "-J",
-            "--no-check-certificates",
-            "--cookies-from-browser", browser,
-            url,
-        ])
-        .stderr(Stdio::null())
-        .output()?;
+/// Inner helper: fetch playlist JSON with or without cookies.
+fn try_fetch_playlist(url: &str, browser: Option<&str>) -> Result<Playlist, Box<dyn std::error::Error>> {
+    let output = build_yt_dlp(
+        &["--flat-playlist", "-J", "--no-check-certificates"],
+        browser,
+        url,
+    )
+    .output()?;
 
     if !output.status.success() {
         return Err("yt-dlp failed to fetch playlist info".into());
@@ -180,7 +202,6 @@ pub fn fetch_playlist(url: &str, browser: &str) -> Result<Playlist, Box<dyn std:
         .unwrap_or(&vec![])
         .iter()
         .filter_map(|entry| {
-            // yt-dlp may return a full URL or just the video ID
             let raw_url = entry.get("webpage_url")
                 .or_else(|| entry.get("url"))
                 .and_then(|v| v.as_str())?;
@@ -202,20 +223,26 @@ pub fn fetch_playlist(url: &str, browser: &str) -> Result<Playlist, Box<dyn std:
     Ok(Playlist { title, videos })
 }
 
+/// Fetches playlist metadata (title + video list) via yt-dlp.
+pub fn fetch_playlist(url: &str, browser: &str) -> Result<Playlist, Box<dyn std::error::Error>> {
+    // Try without cookies first.
+    if let Ok(p) = try_fetch_playlist(url, None) { return Ok(p); }
+
+    // Fall back to cookies.
+    try_fetch_playlist(url, opt_browser(browser))
+}
+
 
 // ── language listing ──────────────────────────────────────────────────────────
 
-pub fn list_available_subs(url: &str, sub_type: &SubType, browser: &str) -> Vec<String> {
-    let output = Command::new("yt-dlp")
-        .args([
-            "-j",
-            "--ignore-errors", // <── تخطي أخطاء الـ SABR والجودات المفقودة جوة الـ VM
-            "--no-check-certificates",
-            "--cookies-from-browser", browser,
-            url,
-        ])
-        .stderr(Stdio::null()) // إخفاء الورنينج في الخلفية
-        .output();
+/// Inner helper: query available subtitle languages with or without cookies.
+fn query_sub_langs(url: &str, sub_type: &SubType, browser: Option<&str>) -> Vec<String> {
+    let output = build_yt_dlp(
+        &["-j", "--ignore-errors", "--no-check-certificates"],
+        browser,
+        url,
+    )
+    .output();
 
     let stdout = match output {
         Ok(o) if !o.stdout.is_empty() => String::from_utf8_lossy(&o.stdout).to_string(),
@@ -253,37 +280,48 @@ pub fn list_available_subs(url: &str, sub_type: &SubType, browser: &str) -> Vec<
     langs
 }
 
+pub fn list_available_subs(url: &str, sub_type: &SubType, browser: &str) -> Vec<String> {
+    // Try without cookies first — avoids failures on headless VMs where
+    // --cookies-from-browser finds the executable but has no profile/session.
+    let langs = query_sub_langs(url, sub_type, None);
+    if !langs.is_empty() { return langs; }
+
+    // Fall back to cookies.
+    query_sub_langs(url, sub_type, opt_browser(browser))
+}
+
 
 // ── downloading ───────────────────────────────────────────────────────────────
 
-fn download_json3(
+/// Inner helper: download a json3 subtitle file with or without cookies.
+fn run_download_json3(
     url:         &str,
     language:    &str,
     sub_type:    &SubType,
     temp_prefix: &str,
-    browser:     &str,
+    browser:     Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let sub_flag = match sub_type {
         SubType::Manual => "--write-subs",
         SubType::Auto   => "--write-auto-subs",
     };
+    let output_template = format!("{temp_prefix}.%(ext)s");
 
-    let status = Command::new("yt-dlp")
-        .args([
-            "--skip-download",
-            "--no-warnings",
-            sub_flag,
-            "--sub-langs",            language,
-            "--sub-format",           "json3",
-            "-o",                     &format!("{temp_prefix}.%(ext)s"),
-            "--no-check-certificates",
-            "--sleep-requests",       "3",
-            "--extractor-retries",    "5",
-            "--retry-sleep",          "exp=1:30",
-            "--cookies-from-browser", browser,
-            url,
-        ])
-        .status()?;
+    // Build base args (no URL yet — build_yt_dlp appends it last).
+    let base: &[&str] = &[
+        "--skip-download",
+        "--no-warnings",
+        sub_flag,
+        "--sub-langs",            language,
+        "--sub-format",           "json3",
+        "-o",                     &output_template,
+        "--no-check-certificates",
+        "--sleep-requests",       "3",
+        "--extractor-retries",    "5",
+        "--retry-sleep",          "exp=1:30",
+    ];
+
+    let status = build_yt_dlp(base, browser, url).status()?;
 
     if !status.success() {
         return Err("yt-dlp exited with a non-zero status".into());
@@ -295,6 +333,22 @@ fn download_json3(
     }
 
     found.into_iter().next().ok_or_else(|| "No json3 file was downloaded.".into())
+}
+
+fn download_json3(
+    url:         &str,
+    language:    &str,
+    sub_type:    &SubType,
+    temp_prefix: &str,
+    browser:     &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    // Try without cookies first.
+    if let Ok(path) = run_download_json3(url, language, sub_type, temp_prefix, None) {
+        return Ok(path);
+    }
+
+    // Fall back to cookies.
+    run_download_json3(url, language, sub_type, temp_prefix, opt_browser(browser))
 }
 
 pub fn download_with_retry(
