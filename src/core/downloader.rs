@@ -342,13 +342,22 @@ fn download_json3(
     temp_prefix: &str,
     browser:     &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    // Try without cookies first.
-    if let Ok(path) = run_download_json3(url, language, sub_type, temp_prefix, None) {
-        return Ok(path);
+    // ...
+    let _status = Command::new("yt-dlp")
+        .args([...])
+        .status()?;
+
+    // We check the first file instead of checking the exit code.
+    // yt-dlp might result in non-zero for reasons unrelated to translation
+    let mut found: Vec<String> = Vec::new();
+    for entry in glob(&format!("{temp_prefix}*.json3"))? {
+        if let Ok(path) = entry {
+            found.push(path.to_string_lossy().into_owned());
+        }
     }
 
-    // Fall back to cookies.
-    run_download_json3(url, language, sub_type, temp_prefix, opt_browser(browser))
+    found.into_iter().next()
+        .ok_or_else(|| "yt-dlp failed and no subtitle file was written.".into())
 }
 
 pub fn download_with_retry(
