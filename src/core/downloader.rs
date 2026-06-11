@@ -26,8 +26,6 @@ use super::types::{Playlist, PlaylistVideo, SubType};
 
 // ── browser detection ─────────────────────────────────────────────────────────
 
-/// Priority-ordered list of supported browsers.
-/// Each entry is (yt-dlp browser name, candidate executables to probe).
 const BROWSER_PRIORITY: &[(&str, &[&str])] = &[
     ("firefox",  &["firefox"]),
     ("chrome",   &["google-chrome", "google-chrome-stable", "chrome"]),
@@ -47,11 +45,10 @@ fn is_installed(exe: &str) -> bool {
         .status().map(|s| s.success()).unwrap_or(false) }
 }
 
-/// Checks that `yt-dlp` is installed and exits with a helpful message if not.
 pub fn require_yt_dlp() {
     if is_installed("yt-dlp") { return; }
     eprintln!();
-    eprintln!("  [1;31m✗[0m  yt-dlp not found");
+    eprintln!("  \x1b[1;31m✗\x1b[0m  yt-dlp not found");
     eprintln!();
     eprintln!("     subscrub requires yt-dlp to download subtitles.");
     eprintln!("     Install it with one of:");
@@ -65,11 +62,10 @@ pub fn require_yt_dlp() {
     std::process::exit(1);
 }
 
-/// Checks that `ffmpeg` is installed and exits with a helpful message if not.
 pub fn require_ffmpeg() {
     if is_installed("ffmpeg") { return; }
     eprintln!();
-    eprintln!("  [1;31m✗[0m  ffmpeg not found");
+    eprintln!("  \x1b[1;31m✗\x1b[0m  ffmpeg not found");
     eprintln!();
     eprintln!("     subscrub requires ffmpeg to embed subtitles into videos.");
     eprintln!("     Install it with one of:");
@@ -82,7 +78,6 @@ pub fn require_ffmpeg() {
     std::process::exit(1);
 }
 
-/// Returns the name of the highest-priority installed browser, or `None`.
 pub fn detect_browser() -> Option<String> {
     for (browser_name, executables) in BROWSER_PRIORITY {
         if executables.iter().any(|exe| is_installed(exe)) {
@@ -95,7 +90,6 @@ pub fn detect_browser() -> Option<String> {
 
 // ── paths ─────────────────────────────────────────────────────────────────────
 
-/// Returns the user's Downloads directory, falling back to the current dir.
 pub fn get_downloads_dir() -> PathBuf {
     dirs::download_dir().unwrap_or_else(|| {
         std::env::var("HOME")
@@ -120,9 +114,6 @@ fn clean_filename(raw: &str) -> String {
     if clean.is_empty() { "untitled".to_string() } else { clean }
 }
 
-/// Builds a yt-dlp `Command` from `base_args`, optionally appending
-/// `--cookies-from-browser <browser>`, then the URL.
-/// Centralises the "try without cookies, fall back with cookies" pattern.
 fn build_yt_dlp(base_args: &[&str], browser: Option<&str>, url: &str) -> Command {
     let mut cmd = Command::new("yt-dlp");
     cmd.args(base_args);
@@ -134,7 +125,6 @@ fn build_yt_dlp(base_args: &[&str], browser: Option<&str>, url: &str) -> Command
     cmd
 }
 
-/// Returns `Some(browser)` only when the string is non-empty.
 fn opt_browser(browser: &str) -> Option<&str> {
     if browser.is_empty() { None } else { Some(browser) }
 }
@@ -142,8 +132,6 @@ fn opt_browser(browser: &str) -> Option<&str> {
 
 // ── video title ───────────────────────────────────────────────────────────────
 
-/// Inner helper: try to get the video title with or without cookies.
-/// Returns `None` when yt-dlp fails or produces an empty title.
 fn try_get_title(url: &str, browser: Option<&str>) -> Option<String> {
     let output = build_yt_dlp(
         &["--get-title", "--no-check-certificates", "--sleep-requests", "2"],
@@ -159,11 +147,6 @@ fn try_get_title(url: &str, browser: Option<&str>) -> Option<String> {
 }
 
 pub fn get_video_title(url: &str, browser: &str) -> String {
-    // Try without cookies first — works for public videos on headless environments
-    // (e.g. VMs without a browser profile/session).
-    if let Some(t) = try_get_title(url, None) { return t; }
-
-    // Fall back to cookies if a browser was detected.
     if let Some(t) = try_get_title(url, opt_browser(browser)) { return t; }
 
     eprintln!("  [warn] Could not fetch title; using 'subtitles'.");
@@ -177,7 +160,6 @@ pub fn is_playlist_url(url: &str) -> bool {
     url.contains("list=") || url.contains("/playlist")
 }
 
-/// Inner helper: fetch playlist JSON with or without cookies.
 fn try_fetch_playlist(url: &str, browser: Option<&str>) -> Result<Playlist, Box<dyn std::error::Error>> {
     let output = build_yt_dlp(
         &["--flat-playlist", "-J", "--no-check-certificates"],
@@ -223,19 +205,13 @@ fn try_fetch_playlist(url: &str, browser: Option<&str>) -> Result<Playlist, Box<
     Ok(Playlist { title, videos })
 }
 
-/// Fetches playlist metadata (title + video list) via yt-dlp.
 pub fn fetch_playlist(url: &str, browser: &str) -> Result<Playlist, Box<dyn std::error::Error>> {
-    // Try without cookies first.
-    if let Ok(p) = try_fetch_playlist(url, None) { return Ok(p); }
-
-    // Fall back to cookies.
     try_fetch_playlist(url, opt_browser(browser))
 }
 
 
 // ── language listing ──────────────────────────────────────────────────────────
 
-/// Inner helper: query available subtitle languages with or without cookies.
 fn query_sub_langs(url: &str, sub_type: &SubType, browser: Option<&str>) -> Vec<String> {
     let output = build_yt_dlp(
         &["-j", "--ignore-errors", "--no-check-certificates"],
@@ -281,12 +257,6 @@ fn query_sub_langs(url: &str, sub_type: &SubType, browser: Option<&str>) -> Vec<
 }
 
 pub fn list_available_subs(url: &str, sub_type: &SubType, browser: &str) -> Vec<String> {
-    // Try without cookies first — avoids failures on headless VMs where
-    // --cookies-from-browser finds the executable but has no profile/session.
-    let langs = query_sub_langs(url, sub_type, None);
-    if !langs.is_empty() { return langs; }
-
-    // Fall back to cookies.
     query_sub_langs(url, sub_type, opt_browser(browser))
 }
 
@@ -342,12 +312,6 @@ fn download_json3(
     temp_prefix: &str,
     browser:     &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    // Try without cookies first.
-    if let Ok(path) = run_download_json3(url, language, sub_type, temp_prefix, None) {
-        return Ok(path);
-    }
-
-    // Fall back to cookies.
     run_download_json3(url, language, sub_type, temp_prefix, opt_browser(browser))
 }
 
