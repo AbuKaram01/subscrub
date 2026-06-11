@@ -209,15 +209,16 @@ pub fn list_available_subs(url: &str, sub_type: &SubType, browser: &str) -> Vec<
     let output = Command::new("yt-dlp")
         .args([
             "-j",
+            "--ignore-errors", // <── تخطي أخطاء الـ SABR والجودات المفقودة جوة الـ VM
             "--no-check-certificates",
             "--cookies-from-browser", browser,
             url,
         ])
-        .stderr(Stdio::null())
+        .stderr(Stdio::null()) // إخفاء الورنينج في الخلفية
         .output();
 
     let stdout = match output {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        Ok(o) if !o.stdout.is_empty() => String::from_utf8_lossy(&o.stdout).to_string(),
         _ => return Vec::new(),
     };
 
