@@ -25,8 +25,8 @@ No tracking. No ads. No cloud. Runs entirely on your machine.
 - **Multiple languages** — select one or more at once
 - **VTT & SRT** — clean output in either format
 - **Subtitle merging** — embed subtitles into videos via ffmpeg (MKV output)
-  - Folder mode: match and merge entire directories
-  - Single mode: merge one video with one or more subtitle files
+  - Folder mode: match and merge entire directories
+  - Single mode: merge one video with one or more subtitle files
 - **Incremental merging** — add more languages to an already-merged file without breaking existing tracks
 - **Smart matching** — matches videos to subtitles by YouTube ID, title, or alphabetical position
 - **Auto browser detection** — finds your installed browser for cookie auth automatically
@@ -38,11 +38,19 @@ No tracking. No ads. No cloud. Runs entirely on your machine.
 
 ## Requirements
 
-| Tool | Purpose |
-|------|---------|
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Subtitle downloading (required) |
-| [ffmpeg](https://ffmpeg.org) | Subtitle merging (required for merge mode only) |
-| A supported browser | Cookie auth for YouTube |
+Tool	For installation
+yt-dlp	
+
+https://github.com/yt-dlp/yt-dlp
+
+Or install from your package repository
+
+
+ffmpeg	https://ffmpeg.org
+
+Or install from your package repository
+
+deno	curl -fsSL https://deno.land/install.sh | sh
 
 Supported browsers: `firefox` · `chrome` · `brave` · `edge` · `chromium` · `opera` · `vivaldi`
 
@@ -87,13 +95,13 @@ Run with no arguments — `subscrub` guides you through everything:
 ```
 $ subscrub
 
-  ▶  subscrub
-     YouTube subtitle downloader & cleaner
-  ────────────────────────────────────────────
+  ▶ subscrub
+     YouTube subtitle downloader & cleaner
+  ────────────────────────────────────────────
 
-  What do you want to do?
-  ❯ Download subtitles
-    Merge subtitles into videos
+  What do you want to do?
+  ❯ Download subtitles
+    Merge subtitles into videos
 ```
 
 ### Download — flags
@@ -101,15 +109,15 @@ $ subscrub
 ```bash
 # Single video
 subscrub --url "https://youtube.com/watch?v=..." \
-       --type auto \
-       --lang ar,en \
-       --format srt
+       --type auto \
+       --lang ar,en \
+       --format srt
 
 # Playlist
 subscrub --url "https://youtube.com/playlist?list=..." \
-       --type auto \
-       --lang ar,en \
-       --format vtt
+       --type auto \
+       --lang ar,en \
+       --format vtt
 ```
 
 ### Merge — flags
@@ -117,14 +125,14 @@ subscrub --url "https://youtube.com/playlist?list=..." \
 ```bash
 # Folder mode
 subscrub --merge \
-       --videos-dir "/path/to/videos" \
-       --subs-dir   "/path/to/subtitles"
+       --videos-dir "/path/to/videos" \
+       --subs-dir "/path/to/subtitles"
 
 # Single file mode
 subscrub --merge \
-       --video "/path/to/video.mkv" \
-       --sub   "/path/to/sub_ar.srt" \
-       --sub   "/path/to/sub_en.srt"
+       --video "/path/to/video.mkv" \
+       --sub "/path/to/sub_ar.srt" \
+       --sub "/path/to/sub_en.srt"
 ```
 
 ### Override browser
@@ -137,29 +145,27 @@ subscrub --browser brave ...
 
 ## Output
 
-| Mode | Output |
-|------|--------|
-| Single video | `~/Downloads/{Title} - {lang}.vtt` |
-| Playlist | `~/Downloads/{Playlist} subs/{Title} - {lang}.vtt` |
-| Merge folder | `{videos folder} merged/{Title}.mkv` |
-| Merge single | `{video location}/{Title}.mkv` (or `_merged.mkv` if input is already MKV) |
+Mode	Output
+Single video	`~/Downloads/{Title} - {lang}.vtt`
+Playlist	`~/Downloads/{Playlist} subs/{Title} - {lang}.vtt`
+Merge folder	`{videos folder} merged/{Title}.mkv`
+Merge single	`{video location}/{Title}.mkv` (or `_merged.mkv` if input is already MKV)
 
 ---
 
 ## All options
 
-| Flag | Short | Description | Required in flags mode |
-|------|-------|-------------|----------------------|
-| `--url` | | YouTube video or playlist URL | Download only |
-| `--type` | `-t` | `manual` or `auto` | Download only |
-| `--lang` | `-l` | Language codes, comma-separated (e.g. `ar,en,fr`) | Download only |
-| `--format` | `-f` | `vtt` or `srt` | Download only |
-| `--browser` | `-b` | Browser for cookie auth | Never (auto-detected) |
-| `--merge` | | Switch to merge mode | — |
-| `--videos-dir` | | Videos folder *(merge folder mode)* | Merge folder |
-| `--subs-dir` | | Subtitles folder *(merge folder mode)* | Merge folder |
-| `--video` | | Single video file *(merge single mode)* | Merge single |
-| `--sub` | | Subtitle file, repeatable *(merge single mode)* | Merge single |
+Flag	Short	Description	Required in flags mode
+`--url`		YouTube video or playlist URL	Download only
+`--type`	`-t`	`manual` or `auto`	Download only
+`--lang`	`-l`	Language codes, comma-separated (e.g. `ar,en,fr`)	Download only
+`--format`	`-f`	`vtt` or `srt`	Download only
+`--browser`	`-b`	Browser for cookie auth	Never (auto-detected)
+`--merge`		Switch to merge mode	—
+`--videos-dir`		Videos folder *(merge folder mode)*	Merge folder
+`--subs-dir`		Subtitles folder *(merge folder mode)*	Merge folder
+`--video`		Single video file *(merge single mode)*	Merge single
+`--sub`		Subtitle file, repeatable *(merge single mode)*	Merge single
 
 ---
 
@@ -169,10 +175,10 @@ subscrub --browser brave ...
 
 ```rust
 use subscrub::core::{
-    downloader::{detect_browser, list_available_subs, download_with_retry},
-    parser::process_json3,
-    writer::write_vtt,
-    merger::{match_videos_to_subs, merge_video, merge_single},
+    downloader::{detect_browser, list_available_subs, download_with_retry},
+    parser::process_json3,
+    writer::write_vtt,
+    merger::{match_videos_to_subs, merge_video, merge_single},
 };
 ```
 
