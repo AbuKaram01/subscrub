@@ -10,12 +10,10 @@ with full language metadata so every media player displays them correctly.
 No tracking. No ads. No cloud. Runs entirely on your machine.
 
 > ⚠️ **Important Notice regarding YouTube Subtitles:**
-> YouTube frequently updates its player encryption (e.g., SABR streaming). If `yt-dlp` fails to extract subtitles (or returns "No subtitles found"), it requires a JavaScript runtime to execute fallback code and bypass YouTube's signature (`nsig`) decryption.
-> You **must** install a JS runtime like **Deno** on your system for seamless extraction:
+> You must install the Dino software on your system for the tool to function correctly. Use the following command:
 > ```bash
-> curl -fsSL [https://deno.land/install.sh](https://deno.land/install.sh) | sh
+> curl -fsSL https://deno.land/install.sh | sh
 > ```
-> *(Ensure Deno is added to your system's `$PATH` after installation).*
 
 ---
 
