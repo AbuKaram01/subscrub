@@ -263,7 +263,6 @@ pub fn list_available_subs(url: &str, sub_type: &SubType, browser: &str) -> Vec<
 
 // ── downloading ───────────────────────────────────────────────────────────────
 
-/// Inner helper: download a json3 subtitle file with or without cookies.
 fn run_download_json3(
     url:         &str,
     language:    &str,
@@ -277,7 +276,6 @@ fn run_download_json3(
     };
     let output_template = format!("{temp_prefix}.%(ext)s");
 
-    // Build base args (no URL yet — build_yt_dlp appends it last).
     let base: &[&str] = &[
         "--skip-download",
         "--no-warnings",
