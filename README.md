@@ -38,19 +38,13 @@ No tracking. No ads. No cloud. Runs entirely on your machine.
 
 ## Requirements
 
-Tool	For installation
-yt-dlp	
-
-https://github.com/yt-dlp/yt-dlp
-
+yt-dlp -->> https://github.com/yt-dlp/yt-dlp
 Or install from your package repository
 
-
-ffmpeg	https://ffmpeg.org
-
+ffmpeg -->> https://ffmpeg.org
 Or install from your package repository
 
-deno	curl -fsSL https://deno.land/install.sh | sh
+deno	 -->> curl -fsSL https://deno.land/install.sh | sh
 
 Supported browsers: `firefox` · `chrome` · `brave` · `edge` · `chromium` · `opera` · `vivaldi`
 
