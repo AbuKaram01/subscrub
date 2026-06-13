@@ -135,6 +135,16 @@ pub fn ask_format() -> SubFormat {
     if choice == "VTT  ·  cleaned" { SubFormat::Vtt } else { SubFormat::Srt }
 }
 
+/// Asks for an optional output folder. Empty input keeps the default location.
+pub fn ask_output_dir(default_hint: &str) -> Option<PathBuf> {
+    let prompt  = format!("Save folder  (Enter = {default_hint}):");
+    let input   = Text::new(&prompt).prompt().expect("Input failed");
+    let trimmed = input.trim();
+
+    if trimmed.is_empty() { return None; }
+    Some(PathBuf::from(trimmed))
+}
+
 /// Asks for a folder path and keeps prompting until a valid directory is entered.
 pub fn ask_dir(prompt: &str) -> PathBuf {
     loop {

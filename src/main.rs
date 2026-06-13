@@ -24,8 +24,9 @@ use std::path::{Path, PathBuf};
 use subscrub::core::{
     downloader::{
         detect_browser, download_with_retry, fetch_playlist,
-        get_downloads_dir, get_video_title, is_playlist_url,
-        list_available_subs, require_ffmpeg, require_yt_dlp, temp_id,
+        get_video_title, is_playlist_url,
+        list_available_subs, require_ffmpeg, require_yt_dlp,
+        resolve_output_dir, temp_id,
     },
     merger::{match_videos_to_subs, merge_single, merge_video},
     parser::process_json3,
@@ -40,7 +41,7 @@ use cli::{
 };
 use cli::ui::{
     ask_dir, ask_file, ask_format, ask_languages, ask_merge_type,
-    ask_sub_files, ask_sub_type, ask_task, ask_url,
+    ask_output_dir, ask_sub_files, ask_sub_type, ask_task, ask_url,
     make_spinner, print_banner, show_browser,
 };
 
@@ -77,6 +78,7 @@ fn print_summary(saved: usize, total: usize) {
 fn run_single(
     url: &str, sub_type: &SubType, browser: &str,
     mode: Mode, cli_lang: Option<&str>, cli_fmt: Option<&str>,
+    output_dir: &Option<PathBuf>,
 ) {
     println!();
     let pb = make_spinner("Fetching available subtitles…".to_string());
@@ -112,7 +114,7 @@ fn run_single(
     println!("  {}", style("─".repeat(44)).dim());
     println!();
 
-    let downloads = get_downloads_dir();
+    let downloads = resolve_output_dir(output_dir);
     let total     = chosen.len();
     let mut saved = 0usize;
 
@@ -151,6 +153,7 @@ fn run_single(
 fn run_playlist(
     url: &str, sub_type: &SubType, browser: &str,
     mode: Mode, cli_lang: Option<&str>, cli_fmt: Option<&str>,
+    output_dir: &Option<PathBuf>,
 ) {
     println!();
     let pb = make_spinner("Fetching playlist info…".to_string());
@@ -178,7 +181,7 @@ fn run_playlist(
     println!();
     let format = match mode { Mode::Interactive => ask_format(), Mode::Flags => parse_format(cli_fmt.unwrap()) };
 
-    let folder_path = get_downloads_dir().join(format!("{} subs", playlist.title));
+    let folder_path = resolve_output_dir(output_dir).join(format!("{} subs", playlist.title));
     if let Err(e) = fs::create_dir_all(&folder_path) { eprintln!("  {}  {}", style("✗").red().bold(), e); return; }
 
     println!();
@@ -226,7 +229,7 @@ fn run_playlist(
 
 // ── merge folder ──────────────────────────────────────────────────────────────
 
-fn run_merge_folder(videos_dir: &Path, subs_dir: &Path) {
+fn run_merge_folder(videos_dir: &Path, subs_dir: &Path, output_dir: &Option<PathBuf>) {
     if !videos_dir.is_dir() { eprintln!("  {}  Videos folder not found.", style("✗").red().bold()); return; }
     if !subs_dir.is_dir()   { eprintln!("  {}  Subtitles folder not found.", style("✗").red().bold()); return; }
 
@@ -248,8 +251,11 @@ fn run_merge_folder(videos_dir: &Path, subs_dir: &Path) {
         eprintln!("  {}  {} video{} matched by position — verify manually", style("!").yellow().bold(), stage3, if stage3 == 1 { "" } else { "s" });
     }
 
-    let output_dir = videos_dir.parent().unwrap_or(Path::new("."))
-        .join(format!("{} merged", videos_dir.file_name().unwrap().to_string_lossy()));
+    let output_dir = match output_dir {
+        Some(p) => p.clone(),
+        None    => videos_dir.parent().unwrap_or(Path::new("."))
+            .join(format!("{} merged", videos_dir.file_name().unwrap().to_string_lossy())),
+    };
 
     if let Err(e) = fs::create_dir_all(&output_dir) { eprintln!("  {}  {}", style("✗").red().bold(), e); return; }
 
@@ -281,7 +287,7 @@ fn run_merge_folder(videos_dir: &Path, subs_dir: &Path) {
 
 // ── merge single ──────────────────────────────────────────────────────────────
 
-fn run_merge_single(video_path: &Path, sub_paths: &[PathBuf]) {
+fn run_merge_single(video_path: &Path, sub_paths: &[PathBuf], output_dir: &Option<PathBuf>) {
     if !video_path.is_file() {
         eprintln!("  {}  Video file not found: {}", style("✗").red().bold(), video_path.display());
         return;
@@ -293,13 +299,20 @@ fn run_merge_single(video_path: &Path, sub_paths: &[PathBuf]) {
         }
     }
 
+    if let Some(dir) = output_dir {
+        if let Err(e) = fs::create_dir_all(dir) {
+            eprintln!("  {}  {}", style("✗").red().bold(), e);
+            return;
+        }
+    }
+
     println!();
     println!("  {}  {}", style("▶").dim(), style(video_path.file_name().unwrap().to_string_lossy()).bold());
     println!("  {}", style("─".repeat(44)).dim());
     println!();
 
     let pb = make_spinner("Merging…".to_string());
-    let result = merge_single(video_path, sub_paths);
+    let result = merge_single(video_path, sub_paths, output_dir.as_deref());
     pb.finish_and_clear();
 
     match result {
@@ -320,6 +333,8 @@ fn main() {
 
     print_banner();
 
+    let custom_output: Option<PathBuf> = cli.output.as_deref().map(PathBuf::from);
+
     // ── determine task ────────────────────────────────────────────────────────
     let task = if cli.merge {
         Task::Merge
@@ -338,6 +353,14 @@ fn main() {
             let browser = resolve_browser(&cli.browser);
             show_browser(&browser);
 
+            let output_dir = match mode {
+                Mode::Interactive if custom_output.is_none() => {
+                    println!();
+                    ask_output_dir("Downloads folder")
+                }
+                _ => custom_output.clone(),
+            };
+
             let url = match mode {
                 Mode::Interactive => { println!(); ask_url() }
                 Mode::Flags       => cli.url.as_deref().unwrap().trim().to_string(),
@@ -352,9 +375,9 @@ fn main() {
             };
 
             if is_playlist_url(&url) {
-                run_playlist(&url, &sub_type, &browser, mode, cli.lang.as_deref(), cli.format.as_deref());
+                run_playlist(&url, &sub_type, &browser, mode, cli.lang.as_deref(), cli.format.as_deref(), &output_dir);
             } else {
-                run_single(&url, &sub_type, &browser, mode, cli.lang.as_deref(), cli.format.as_deref());
+                run_single(&url, &sub_type, &browser, mode, cli.lang.as_deref(), cli.format.as_deref(), &output_dir);
             }
         }
 
@@ -365,16 +388,24 @@ fn main() {
 
             let is_single_flags = cli.video.is_some() || !cli.sub.is_empty();
 
+            let output_dir = match mode {
+                Mode::Interactive if custom_output.is_none() => {
+                    println!();
+                    ask_output_dir("alongside the source files")
+                }
+                _ => custom_output.clone(),
+            };
+
             match mode {
                 Mode::Flags => {
                     if is_single_flags {
                         let video    = PathBuf::from(cli.video.as_deref().unwrap());
                         let sub_paths: Vec<PathBuf> = cli.sub.iter().map(PathBuf::from).collect();
-                        run_merge_single(&video, &sub_paths);
+                        run_merge_single(&video, &sub_paths, &output_dir);
                     } else {
                         let videos_dir = PathBuf::from(cli.videos_dir.as_deref().unwrap());
                         let subs_dir   = PathBuf::from(cli.subs_dir.as_deref().unwrap());
-                        run_merge_folder(&videos_dir, &subs_dir);
+                        run_merge_folder(&videos_dir, &subs_dir, &output_dir);
                     }
                 }
 
@@ -384,12 +415,12 @@ fn main() {
                         MergeType::Folder => {
                             let videos_dir = ask_dir("Videos folder:");
                             let subs_dir   = ask_dir("Subtitles folder:");
-                            run_merge_folder(&videos_dir, &subs_dir);
+                            run_merge_folder(&videos_dir, &subs_dir, &output_dir);
                         }
                         MergeType::Single => {
                             let video     = ask_file("Video file:");
                             let sub_paths = ask_sub_files();
-                            run_merge_single(&video, &sub_paths);
+                            run_merge_single(&video, &sub_paths, &output_dir);
                         }
                     }
                 }

@@ -98,6 +98,15 @@ pub fn get_downloads_dir() -> PathBuf {
     })
 }
 
+/// Returns the user-chosen output directory (creating it if needed),
+/// or falls back to the default Downloads folder.
+pub fn resolve_output_dir(custom: &Option<PathBuf>) -> PathBuf {
+    match custom {
+        Some(p) => { let _ = std::fs::create_dir_all(p); p.clone() }
+        None    => get_downloads_dir(),
+    }
+}
+
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

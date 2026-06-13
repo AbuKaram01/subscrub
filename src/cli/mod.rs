@@ -68,6 +68,10 @@ pub struct Cli {
     #[arg(short, long, value_name = "FORMAT", value_parser = ["vtt", "srt"])]
     pub format: Option<String>,
 
+    /// Output folder — where downloaded subtitles or merged videos are saved
+    #[arg(short = 'o', long, value_name = "PATH")]
+    pub output: Option<String>,
+
     /// Browser for cookie extraction — auto-detected if omitted
     #[arg(short, long, value_name = "BROWSER",
           value_parser = ["firefox", "chrome", "brave", "edge", "chromium", "opera", "vivaldi"])]

@@ -1,58 +1,89 @@
 # subscrub
 
-**Download, clean, and embed YouTube subtitles — from the terminal.**
+**A fast CLI tool to download, clean, convert, and embed YouTube subtitles.**
 
-`subscrub` fetches subtitles directly from YouTube in `json3` format, cleans them
-(removes noise tags, music symbols, and HTML artifacts), and saves them as **VTT**
-or **SRT** files. It also embeds cleaned subtitles into video files via ffmpeg,
-with full language metadata so every media player displays them correctly.
+Download subtitles directly from YouTube, remove formatting noise and HTML artifacts, export them as **VTT** or **SRT**, and merge them into videos with proper language metadata using **ffmpeg**.
 
-No tracking. No ads. No cloud. Runs entirely on your machine.
-
-> ⚠️ **Important Notice regarding YouTube Subtitles:**
-> You must install the Dino software on your system for the tool to function correctly. Use the following command:
-> ```bash
-> curl -fsSL https://deno.land/install.sh | sh
-> ```
+**100% local • No tracking • No ads • No cloud • Script-friendly**
 
 ---
 
 ## Features
 
-- **Interactive mode** — guided prompts, no flags needed
-- **Flags mode** — fully scriptable, zero prompts
-- **Playlist support** — downloads subtitles for every video in a playlist
-- **Multiple languages** — select one or more at once
-- **VTT & SRT** — clean output in either format
-- **Subtitle merging** — embed subtitles into videos via ffmpeg (MKV output)
-  - Folder mode: match and merge entire directories
-  - Single mode: merge one video with one or more subtitle files
-- **Incremental merging** — add more languages to an already-merged file without breaking existing tracks
-- **Smart matching** — matches videos to subtitles by YouTube ID, title, or alphabetical position
-- **Auto browser detection** — finds your installed browser for cookie auth automatically
-- **Browser priority** — Firefox → Chrome → Brave → Edge → Chromium → Opera → Vivaldi
-- **RTL support** — Arabic, Hebrew, Persian, Urdu get correct direction styling in VTT
-- **Retry logic** — exponential back-off on network failures
+### Download
+
+- Download subtitles from single videos or entire playlists
+    
+- Support for manual and auto-generated subtitles
+    
+- Download one or multiple languages at once
+    
+
+### Clean
+
+- Remove music symbols and decorative characters
+    
+- Strip HTML artifacts and formatting noise
+    
+- Produce clean, readable subtitle files
+    
+
+### Export
+
+- Export to **VTT** or **SRT**
+    
+- RTL-aware VTT styling for Arabic, Hebrew, Persian, and Urdu
+    
+
+### Merge
+
+- Embed subtitles into videos using **ffmpeg**
+    
+- Folder mode: merge complete directories
+    
+- Single mode: merge one video with multiple subtitle files
+    
+- Incremental merging without replacing existing subtitle tracks
+    
+- Smart matching by YouTube ID, title, or alphabetical order
+    
+
+### Automation
+
+- Interactive terminal interface
+    
+- Fully scriptable flags mode
+    
+- Automatic browser detection for cookie authentication
+    
+- Exponential back-off retry logic for network failures
+    
 
 ---
 
 ## Requirements
 
-yt-dlp -->> https://github.com/yt-dlp/yt-dlp
-Or install from your package repository
+subscrub depends on the following tools:
 
-ffmpeg -->> https://ffmpeg.org
-Or install from your package repository
+|Dependency|Purpose|
+|---|---|
+|yt-dlp|Access YouTube subtitle data|
+|ffmpeg|Merge subtitles into videos|
+|Deno|Runtime required by subscrub|
 
-deno	 -->> curl -fsSL https://deno.land/install.sh | sh
+Install Deno:
 
-Supported browsers: `firefox` · `chrome` · `brave` · `edge` · `chromium` · `opera` · `vivaldi`
+```bash
+curl -fsSL https://deno.land/install.sh | sh
+```
+
+Install `yt-dlp` and `ffmpeg` using your distribution's package manager.
 
 ---
 
 ## Installation
 
-### From source
+### Build from source
 
 ```bash
 git clone https://github.com/AbuKaram01/subscrub
@@ -61,15 +92,15 @@ cargo build --release
 sudo cp target/release/subscrub /usr/local/bin/
 ```
 
-### Debian / Ubuntu — `.deb`
+### Debian / Ubuntu (.deb)
 
 ```bash
 cargo install cargo-deb
 cargo deb
-sudo dpkg -i target/debian/subget_*.deb
+sudo dpkg -i target/debian/subscrub_*.deb
 ```
 
-### Fedora / RHEL / openSUSE — `.rpm`
+### Fedora / RHEL / openSUSE (.rpm)
 
 ```bash
 cargo install cargo-generate-rpm
@@ -80,123 +111,175 @@ sudo rpm -i target/generate-rpm/subscrub-*.rpm
 
 ---
 
-## Usage
+# Quick Start
 
-### Interactive mode
-
-Run with no arguments — `subscrub` guides you through everything:
-
-```
-$ subscrub
-
-  ▶ subscrub
-     YouTube subtitle downloader & cleaner
-  ────────────────────────────────────────────
-
-  What do you want to do?
-  ❯ Download subtitles
-    Merge subtitles into videos
-```
-
-### Download — flags
+Run without any arguments to launch interactive mode:
 
 ```bash
-# Single video
-subscrub --url "https://youtube.com/watch?v=..." \
-       --type auto \
-       --lang ar,en \
-       --format srt
-
-# Playlist
-subscrub --url "https://youtube.com/playlist?list=..." \
-       --type auto \
-       --lang ar,en \
-       --format vtt
+subscrub
 ```
 
-### Merge — flags
+Example:
 
-```bash
-# Folder mode
-subscrub --merge \
-       --videos-dir "/path/to/videos" \
-       --subs-dir "/path/to/subtitles"
+```text
+▶ subscrub
+   YouTube subtitle downloader & cleaner
+────────────────────────────────────────────
 
-# Single file mode
-subscrub --merge \
-       --video "/path/to/video.mkv" \
-       --sub "/path/to/sub_ar.srt" \
-       --sub "/path/to/sub_en.srt"
-```
+What do you want to do?
 
-### Override browser
-
-```bash
-subscrub --browser brave ...
+❯ Download subtitles
+  Merge subtitles into videos
 ```
 
 ---
 
-## Output
+# Download Mode
 
-Mode	Output
-Single video	`~/Downloads/{Title} - {lang}.vtt`
-Playlist	`~/Downloads/{Playlist} subs/{Title} - {lang}.vtt`
-Merge folder	`{videos folder} merged/{Title}.mkv`
-Merge single	`{video location}/{Title}.mkv` (or `_merged.mkv` if input is already MKV)
+### Single video
+
+```bash
+subscrub \
+    --url "https://youtube.com/watch?v=..." \
+    --type auto \
+    --lang ar,en \
+    --format srt \
+    --output "/path/to/output"
+```
+
+### Playlist
+
+```bash
+subscrub \
+    --url "https://youtube.com/playlist?list=..." \
+    --type auto \
+    --lang ar,en \
+    --format vtt \
+    --output "/path/to/output"
+```
 
 ---
 
-## All options
+# Merge Mode
 
-Flag	Short	Description	Required in flags mode
-`--url`		YouTube video or playlist URL	Download only
-`--type`	`-t`	`manual` or `auto`	Download only
-`--lang`	`-l`	Language codes, comma-separated (e.g. `ar,en,fr`)	Download only
-`--format`	`-f`	`vtt` or `srt`	Download only
-`--browser`	`-b`	Browser for cookie auth	Never (auto-detected)
-`--merge`		Switch to merge mode	—
-`--videos-dir`		Videos folder *(merge folder mode)*	Merge folder
-`--subs-dir`		Subtitles folder *(merge folder mode)*	Merge folder
-`--video`		Single video file *(merge single mode)*	Merge single
-`--sub`		Subtitle file, repeatable *(merge single mode)*	Merge single
+### Folder mode
+
+```bash
+subscrub \
+    --merge \
+    --videos-dir "/path/to/videos" \
+    --subs-dir "/path/to/subtitles"
+    --output "/path/to/output"
+```
+
+### Single file mode
+
+```bash
+subscrub \
+    --merge \
+    --video "/path/to/video.mkv" \
+    --sub "/path/to/sub_ar.srt" \
+    --sub "/path/to/sub_en.srt"
+    --output "/path/to/output"
+```
 
 ---
 
-## Library usage
+# Browser Selection
 
-`subscrub` is also usable as a Rust library:
+By default, subscrub automatically detects an installed browser using the following priority:
+
+```
+Firefox → Chrome → Brave → Edge → Chromium → Opera → Vivaldi
+```
+
+To override automatic detection:
+
+```bash
+subscrub --browser brave
+```
+
+---
+
+# Command Line Options
+
+|Flag|Short|Description|
+|---|---|---|
+|`--url`||YouTube video or playlist URL|
+|`--type`|`-t`|`manual` or `auto` subtitles|
+|`--lang`|`-l`|Comma-separated language codes (`ar,en,fr`)|
+|`--format`|`-f`|`vtt` or `srt`|
+|`--browser`|`-b`|Browser used for cookie authentication|
+|`--output`|`-o`|Output directory|
+|`--merge`||Enable merge mode|
+|`--videos-dir`||Videos directory (folder mode)|
+|`--subs-dir`||Subtitle directory (folder mode)|
+|`--video`||Single video file|
+|`--sub`||Subtitle file (repeatable)|
+
+---
+
+# Library Usage
+
+subscrub can also be embedded into Rust applications.
 
 ```rust
 use subscrub::core::{
-    downloader::{detect_browser, list_available_subs, download_with_retry},
-    parser::process_json3,
-    writer::write_vtt,
-    merger::{match_videos_to_subs, merge_video, merge_single},
+    downloader::{detect_browser, list_available_subs, download_with_retry},
+    parser::process_json3,
+    writer::write_vtt,
+    merger::{match_videos_to_subs, merge_video, merge_single},
 };
 ```
 
 ---
 
-## Contributing
+# Why subscrub?
 
-Contributions are welcome. Please:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Commit your changes: `git commit -m 'Add your feature'`
-4. Push and open a pull request
-
-The codebase is split into `core/` (pure logic, no UI) and `cli/` (terminal interface),
-so it should be straightforward to find where changes belong.
+- Runs entirely on your machine
+    
+- No tracking or telemetry
+    
+- No cloud services
+    
+- No ads
+    
+- Supports scripting and automation
+    
+- Built with Rust for speed and reliability
+    
 
 ---
 
-## License
+# Contributing
+
+Contributions are welcome.
+
+1. Fork the repository
+    
+2. Create a feature branch
+    
+
+```bash
+git checkout -b feature/your-feature
+```
+
+3. Commit your changes
+    
+
+```bash
+git commit -m "Add your feature"
+```
+
+4. Push your branch and open a Pull Request
+    
+
+---
+
+# License
 
 Copyright (C) 2026 AbuKaram01
 
-This program is free software: you can redistribute it and/or modify it under
-the terms of the **GNU General Public License v3.0** or later.
+This program is free software: you can redistribute it and/or modify it under the terms of the **GNU General Public License v3.0** or any later version.
 
-See [LICENSE](LICENSE) for the full text.
+See the **LICENSE** file for the full license text.

@@ -347,17 +347,22 @@ pub fn merge_video(
 
 // ── single file merge ─────────────────────────────────────────────────────────
 
-/// Embeds one or more subtitle files into a single video, output next to the video.
+/// Embeds one or more subtitle files into a single video.
+///
+/// If `output_dir` is `Some`, the merged file is written there; otherwise it
+/// is written next to the source video.
 pub fn merge_single(
     video_path: &Path,
     sub_paths:  &[PathBuf],
+    output_dir: Option<&Path>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
 
     let (title, _) = parse_video_name(
         video_path.file_name().unwrap().to_str().unwrap(),
     );
     let output_name = clean_filename(&title);
-    let output_dir  = video_path.parent().unwrap_or(Path::new("."));
+    let output_dir  = output_dir
+        .unwrap_or_else(|| video_path.parent().unwrap_or(Path::new(".")));
 
     // If output would overwrite the source file (e.g. input is already .mkv),
     // append _merged to avoid ffmpeg reading and writing the same file.
