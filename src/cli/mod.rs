@@ -21,7 +21,6 @@ use console::style;
 
 use subscrub::core::types::{SubFormat, SubType};
 
-
 // ── task & merge type ─────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy)]
@@ -36,13 +35,12 @@ pub enum MergeType {
     Single,
 }
 
-
 // ── CLI definition ────────────────────────────────────────────────────────────
 
 #[derive(Parser)]
 #[command(
-    name       = "subscrub",
-    about      = "Download & clean YouTube subtitles",
+    name = "subscrub",
+    about = "Download & clean YouTube subtitles",
     long_about = "\
 Run with no flags for a guided interactive session.\n\
 Run with ALL required flags to skip every prompt (scripting).\n\n\
@@ -98,7 +96,6 @@ pub struct Cli {
     pub sub: Vec<String>,
 }
 
-
 // ── mode detection ────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy)]
@@ -108,27 +105,25 @@ pub enum Mode {
 }
 
 pub fn detect_download_mode(cli: &Cli) -> Mode {
-    let any = cli.url.is_some()
-        || cli.sub_type.is_some()
-        || cli.lang.is_some()
-        || cli.format.is_some();
+    let any =
+        cli.url.is_some() || cli.sub_type.is_some() || cli.lang.is_some() || cli.format.is_some();
 
-    let all = cli.url.is_some()
-        && cli.sub_type.is_some()
-        && cli.lang.is_some()
-        && cli.format.is_some();
+    let all =
+        cli.url.is_some() && cli.sub_type.is_some() && cli.lang.is_some() && cli.format.is_some();
 
     match (any, all) {
-        (false, _)    => Mode::Interactive,
-        (true, true)  => Mode::Flags,
+        (false, _) => Mode::Interactive,
+        (true, true) => Mode::Flags,
         (true, false) => {
             let missing: Vec<&str> = [
-                cli.url     .is_none().then_some("--url"),
+                cli.url.is_none().then_some("--url"),
                 cli.sub_type.is_none().then_some("--type"),
-                cli.lang    .is_none().then_some("--lang"),
-                cli.format  .is_none().then_some("--format"),
+                cli.lang.is_none().then_some("--lang"),
+                cli.format.is_none().then_some("--format"),
             ]
-            .into_iter().flatten().collect();
+            .into_iter()
+            .flatten()
+            .collect();
 
             eprintln!(
                 "\n  {}  download mode requires: {}\n",
@@ -156,32 +151,61 @@ pub fn detect_merge_mode(cli: &Cli) -> Mode {
 
     if has_folder {
         return match (cli.videos_dir.is_some(), cli.subs_dir.is_some()) {
-            (true, true)  => Mode::Flags,
-            (true, false) => { eprintln!("\n  {}  folder merge requires: --subs-dir\n",   style("✗").red().bold()); std::process::exit(1); }
-            (false, _)    => { eprintln!("\n  {}  folder merge requires: --videos-dir\n", style("✗").red().bold()); std::process::exit(1); }
+            (true, true) => Mode::Flags,
+            (true, false) => {
+                eprintln!(
+                    "\n  {}  folder merge requires: --subs-dir\n",
+                    style("✗").red().bold()
+                );
+                std::process::exit(1);
+            }
+            (false, _) => {
+                eprintln!(
+                    "\n  {}  folder merge requires: --videos-dir\n",
+                    style("✗").red().bold()
+                );
+                std::process::exit(1);
+            }
         };
     }
 
     if has_single {
         return match (cli.video.is_some(), !cli.sub.is_empty()) {
-            (true, true)  => Mode::Flags,
-            (true, false) => { eprintln!("\n  {}  single merge requires: --sub\n",   style("✗").red().bold()); std::process::exit(1); }
-            (false, _)    => { eprintln!("\n  {}  single merge requires: --video\n", style("✗").red().bold()); std::process::exit(1); }
+            (true, true) => Mode::Flags,
+            (true, false) => {
+                eprintln!(
+                    "\n  {}  single merge requires: --sub\n",
+                    style("✗").red().bold()
+                );
+                std::process::exit(1);
+            }
+            (false, _) => {
+                eprintln!(
+                    "\n  {}  single merge requires: --video\n",
+                    style("✗").red().bold()
+                );
+                std::process::exit(1);
+            }
         };
     }
 
     Mode::Interactive
 }
 
-
 // ── flags parsers ─────────────────────────────────────────────────────────────
 
 pub fn parse_sub_type(s: &str) -> SubType {
-    match s { "manual" => SubType::Manual, _ => SubType::Auto }
+    match s {
+        "manual" => SubType::Manual,
+        _ => SubType::Auto,
+    }
 }
 
 pub fn parse_format(s: &str) -> SubFormat {
-    match s { "vtt" => SubFormat::Vtt, _ => SubFormat::Srt }
+    match s {
+        "vtt" => SubFormat::Vtt,
+        _ => SubFormat::Srt,
+    }
 }
 
 pub fn parse_languages(arg: &str, languages: &[String]) -> Vec<usize> {
@@ -203,12 +227,19 @@ pub fn parse_languages(arg: &str, languages: &[String]) -> Vec<usize> {
         .collect();
 
     if indices.is_empty() {
-        eprintln!("  {}  None of the requested languages are available.", style("✗").red().bold());
+        eprintln!(
+            "  {}  None of the requested languages are available.",
+            style("✗").red().bold()
+        );
         std::process::exit(1);
     }
 
     let chosen: Vec<&str> = indices.iter().map(|&i| languages[i].as_str()).collect();
-    println!("  {}  {}", style("✓").green().bold(), style(chosen.join("  ·  ")).cyan());
+    println!(
+        "  {}  {}",
+        style("✓").green().bold(),
+        style(chosen.join("  ·  ")).cyan()
+    );
 
     indices
 }

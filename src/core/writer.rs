@@ -16,25 +16,23 @@
 
 use super::types::SubCue;
 
-
 // ── timestamp helpers ─────────────────────────────────────────────────────────
 
 fn ms_to_vtt_timestamp(ms: i64) -> String {
-    let h      = ms / 3_600_000;
-    let m      = (ms % 3_600_000) / 60_000;
-    let s      = (ms % 60_000)    / 1_000;
+    let h = ms / 3_600_000;
+    let m = (ms % 3_600_000) / 60_000;
+    let s = (ms % 60_000) / 1_000;
     let millis = ms % 1_000;
     format!("{h:02}:{m:02}:{s:02}.{millis:03}")
 }
 
 fn ms_to_srt_timestamp(ms: i64) -> String {
-    let h      = ms / 3_600_000;
-    let m      = (ms % 3_600_000) / 60_000;
-    let s      = (ms % 60_000)    / 1_000;
+    let h = ms / 3_600_000;
+    let m = (ms % 3_600_000) / 60_000;
+    let s = (ms % 60_000) / 1_000;
     let millis = ms % 1_000;
     format!("{h:02}:{m:02}:{s:02},{millis:03}")
 }
-
 
 // ── RTL detection ─────────────────────────────────────────────────────────────
 
@@ -42,7 +40,6 @@ pub fn is_rtl_lang(lang: &str) -> bool {
     let l = lang.to_lowercase();
     l.starts_with("ar") || l.starts_with("he") || l.starts_with("fa") || l.starts_with("ur")
 }
-
 
 // ── writers ───────────────────────────────────────────────────────────────────
 

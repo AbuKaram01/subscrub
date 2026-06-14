@@ -16,19 +16,22 @@
 
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
-use inquire::{Select, MultiSelect, Text};
+use inquire::{MultiSelect, Select, Text};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use subscrub::core::types::{SubFormat, SubType};
 use super::{MergeType, Task};
-
+use subscrub::core::types::{SubFormat, SubType};
 
 // ── banner & spinner ──────────────────────────────────────────────────────────
 
 pub fn print_banner() {
     println!();
-    println!("  {}  {}", style("▶").red().bold(), style("subscrub").white().bold());
+    println!(
+        "  {}  {}",
+        style("▶").red().bold(),
+        style("subscrub").white().bold()
+    );
     println!("  {}", style("YouTube subtitle downloader & cleaner").dim());
     println!("  {}", style("─".repeat(44)).dim());
     println!();
@@ -54,7 +57,6 @@ pub fn make_spinner(msg: String) -> ProgressBar {
     pb
 }
 
-
 // ── interactive prompts ───────────────────────────────────────────────────────
 
 pub fn ask_task() -> Task {
@@ -65,7 +67,11 @@ pub fn ask_task() -> Task {
     .prompt()
     .expect("Selection failed");
 
-    if choice == "Download subtitles" { Task::Download } else { Task::Merge }
+    if choice == "Download subtitles" {
+        Task::Download
+    } else {
+        Task::Merge
+    }
 }
 
 pub fn ask_merge_type() -> MergeType {
@@ -79,7 +85,11 @@ pub fn ask_merge_type() -> MergeType {
     .prompt()
     .expect("Selection failed");
 
-    if choice.starts_with("Folder") { MergeType::Folder } else { MergeType::Single }
+    if choice.starts_with("Folder") {
+        MergeType::Folder
+    } else {
+        MergeType::Single
+    }
 }
 
 pub fn ask_url() -> String {
@@ -98,7 +108,11 @@ pub fn ask_sub_type() -> SubType {
     .prompt()
     .expect("Selection failed");
 
-    if choice == "Manual (community)" { SubType::Manual } else { SubType::Auto }
+    if choice == "Manual (community)" {
+        SubType::Manual
+    } else {
+        SubType::Auto
+    }
 }
 
 pub fn ask_languages(languages: &[String]) -> Vec<usize> {
@@ -111,7 +125,10 @@ pub fn ask_languages(languages: &[String]) -> Vec<usize> {
     .unwrap_or_default();
 
     if chosen.is_empty() {
-        eprintln!("  {}  No languages selected — exiting.", style("✗").red().bold());
+        eprintln!(
+            "  {}  No languages selected — exiting.",
+            style("✗").red().bold()
+        );
         std::process::exit(1);
     }
 
@@ -120,28 +137,35 @@ pub fn ask_languages(languages: &[String]) -> Vec<usize> {
         .filter_map(|c| languages.iter().position(|l| l == c))
         .collect();
 
-    println!("  {}  {}", style("✓").green().bold(), style(chosen.join("  ·  ")).cyan());
+    println!(
+        "  {}  {}",
+        style("✓").green().bold(),
+        style(chosen.join("  ·  ")).cyan()
+    );
     indices
 }
 
 pub fn ask_format() -> SubFormat {
-    let choice = Select::new(
-        "Output format",
-        vec!["VTT  ·  cleaned", "SRT  ·  cleaned"],
-    )
-    .prompt()
-    .expect("Selection failed");
+    let choice = Select::new("Output format", vec!["VTT  ·  cleaned", "SRT  ·  cleaned"])
+        .prompt()
+        .expect("Selection failed");
 
-    if choice == "VTT  ·  cleaned" { SubFormat::Vtt } else { SubFormat::Srt }
+    if choice == "VTT  ·  cleaned" {
+        SubFormat::Vtt
+    } else {
+        SubFormat::Srt
+    }
 }
 
 /// Asks for an optional output folder. Empty input keeps the default location.
 pub fn ask_output_dir(default_hint: &str) -> Option<PathBuf> {
-    let prompt  = format!("Save folder  (Enter = {default_hint}):");
-    let input   = Text::new(&prompt).prompt().expect("Input failed");
+    let prompt = format!("Save folder  (Enter = {default_hint}):");
+    let input = Text::new(&prompt).prompt().expect("Input failed");
     let trimmed = input.trim();
 
-    if trimmed.is_empty() { return None; }
+    if trimmed.is_empty() {
+        return None;
+    }
     Some(PathBuf::from(trimmed))
 }
 
@@ -149,9 +173,14 @@ pub fn ask_output_dir(default_hint: &str) -> Option<PathBuf> {
 pub fn ask_dir(prompt: &str) -> PathBuf {
     loop {
         let input = Text::new(prompt).prompt().expect("Input failed");
-        let path  = PathBuf::from(input.trim());
-        if path.is_dir() { return path; }
-        eprintln!("  {}  Path not found or is not a folder — try again.", style("✗").red().bold());
+        let path = PathBuf::from(input.trim());
+        if path.is_dir() {
+            return path;
+        }
+        eprintln!(
+            "  {}  Path not found or is not a folder — try again.",
+            style("✗").red().bold()
+        );
     }
 }
 
@@ -159,8 +188,10 @@ pub fn ask_dir(prompt: &str) -> PathBuf {
 pub fn ask_file(prompt: &str) -> PathBuf {
     loop {
         let input = Text::new(prompt).prompt().expect("Input failed");
-        let path  = PathBuf::from(input.trim());
-        if path.is_file() { return path; }
+        let path = PathBuf::from(input.trim());
+        if path.is_file() {
+            return path;
+        }
         eprintln!("  {}  File not found — try again.", style("✗").red().bold());
     }
 }
@@ -181,7 +212,10 @@ pub fn ask_sub_files() -> Vec<PathBuf> {
 
         if trimmed.is_empty() {
             if files.is_empty() {
-                eprintln!("  {}  Add at least one subtitle file.", style("!").yellow().bold());
+                eprintln!(
+                    "  {}  Add at least one subtitle file.",
+                    style("!").yellow().bold()
+                );
                 continue;
             }
             break;
@@ -200,6 +234,10 @@ pub fn ask_sub_files() -> Vec<PathBuf> {
         .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
         .collect();
 
-    println!("  {}  {}", style("✓").green().bold(), style(names.join("  ·  ")).cyan());
+    println!(
+        "  {}  {}",
+        style("✓").green().bold(),
+        style(names.join("  ·  ")).cyan()
+    );
     files
 }

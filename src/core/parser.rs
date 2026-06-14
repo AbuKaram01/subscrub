@@ -21,52 +21,56 @@ use std::fs;
 
 use super::types::{Event, SubCue};
 
-
 // ── decoding ──────────────────────────────────────────────────────────────────
 
 pub fn try_decode(bytes: &[u8]) -> String {
     let stripped = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes);
-    if let Ok(s) = std::str::from_utf8(stripped) { return s.to_string(); }
+    if let Ok(s) = std::str::from_utf8(stripped) {
+        return s.to_string();
+    }
     if bytes.starts_with(&[0xFF, 0xFE]) {
         let (decoded, _, had_errors) = UTF_16LE.decode(&bytes[2..]);
-        if !had_errors { return decoded.into_owned(); }
+        if !had_errors {
+            return decoded.into_owned();
+        }
     }
     if bytes.starts_with(&[0xFE, 0xFF]) {
         let (decoded, _, had_errors) = UTF_16BE.decode(&bytes[2..]);
-        if !had_errors { return decoded.into_owned(); }
+        if !had_errors {
+            return decoded.into_owned();
+        }
     }
     let (decoded, _, _) = WINDOWS_1252.decode(bytes);
     decoded.into_owned()
 }
-
 
 // ── json3 parsing ─────────────────────────────────────────────────────────────
 
 pub fn parse_json3(bytes: &[u8]) -> Vec<Event> {
     let content = try_decode(bytes);
     let json: Value = match serde_json::from_str(&content) {
-        Ok(v)  => v,
-        Err(e) => { eprintln!("  [warn] json3 parse error: {e}"); return Vec::new(); }
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("  [warn] json3 parse error: {e}");
+            return Vec::new();
+        }
     };
 
     let events = match json.get("events").and_then(|v| v.as_array()) {
         Some(e) => e,
-        None    => return Vec::new(),
+        None => return Vec::new(),
     };
 
     let mut out: Vec<Event> = Vec::new();
 
     for event in events {
-        let t_start = event.get("tStartMs")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+        let t_start = event.get("tStartMs").and_then(|v| v.as_i64()).unwrap_or(0);
 
-        let duration_ms = event.get("dDurationMs")
-            .and_then(|v| v.as_i64());
+        let duration_ms = event.get("dDurationMs").and_then(|v| v.as_i64());
 
         let segs = match event.get("segs").and_then(|v| v.as_array()) {
             Some(s) => s,
-            None    => continue,
+            None => continue,
         };
 
         let mut event_words: Vec<(String, i64)> = Vec::new();
@@ -74,13 +78,13 @@ pub fn parse_json3(bytes: &[u8]) -> Vec<Event> {
         for seg in segs {
             let text = match seg.get("utf8").and_then(|v| v.as_str()) {
                 Some(t) => t.to_string(),
-                None    => continue,
+                None => continue,
             };
-            if text.trim().is_empty() { continue; }
+            if text.trim().is_empty() {
+                continue;
+            }
 
-            let offset = seg.get("tOffsetMs")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0);
+            let offset = seg.get("tOffsetMs").and_then(|v| v.as_i64()).unwrap_or(0);
 
             let tokens: Vec<&str> = text.split_whitespace().collect();
             let n = tokens.len() as i64;
@@ -90,50 +94,79 @@ pub fn parse_json3(bytes: &[u8]) -> Vec<Event> {
             }
         }
 
-        if event_words.is_empty() { continue; }
+        if event_words.is_empty() {
+            continue;
+        }
 
-        let text     = event_words.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>().join(" ");
+        let text = event_words
+            .iter()
+            .map(|(t, _)| t.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
         let start_ms = event_words[0].1;
-        let end_ms   = duration_ms.map(|d| t_start + d);
+        let end_ms = duration_ms.map(|d| t_start + d);
 
-        out.push(Event { start_ms, end_ms, text });
+        out.push(Event {
+            start_ms,
+            end_ms,
+            text,
+        });
     }
 
     out
 }
 
-
 // ── cleaning ──────────────────────────────────────────────────────────────────
 
 fn is_noise_bracket(inner: &str) -> bool {
     let lower = inner.to_lowercase();
-    if !inner.chars().any(|c| c.is_alphabetic()) { return true; }
+    if !inner.chars().any(|c| c.is_alphabetic()) {
+        return true;
+    }
     const NOISE: &[&str] = &[
-        "music", "applause", "laughter", "cheering", "singing",
-        "موسيقى", "تصفيق", "ضحك", "silence", "background noise",
-        "indistinct", "inaudible", "crosstalk",
+        "music",
+        "applause",
+        "laughter",
+        "cheering",
+        "singing",
+        "موسيقى",
+        "تصفيق",
+        "ضحك",
+        "silence",
+        "background noise",
+        "indistinct",
+        "inaudible",
+        "crosstalk",
     ];
     NOISE.iter().any(|n| lower.contains(n))
 }
 
 fn clean_word(word: &str) -> Option<String> {
     use std::sync::OnceLock;
-    static RE_HTML:     OnceLock<Regex> = OnceLock::new();
+    static RE_HTML: OnceLock<Regex> = OnceLock::new();
     static RE_BRACKETS: OnceLock<Regex> = OnceLock::new();
-    static RE_MUSIC:    OnceLock<Regex> = OnceLock::new();
+    static RE_MUSIC: OnceLock<Regex> = OnceLock::new();
 
-    let re_html     = RE_HTML    .get_or_init(|| Regex::new(r"<[^>]+>").unwrap());
+    let re_html = RE_HTML.get_or_init(|| Regex::new(r"<[^>]+>").unwrap());
     let re_brackets = RE_BRACKETS.get_or_init(|| Regex::new(r"\[([^\]]*)\]").unwrap());
-    let re_music    = RE_MUSIC   .get_or_init(|| Regex::new(r"[♪♫]+").unwrap());
+    let re_music = RE_MUSIC.get_or_init(|| Regex::new(r"[♪♫]+").unwrap());
 
     let t = re_html.replace_all(word, "");
     let t = re_brackets.replace_all(&t, |caps: &regex::Captures| {
-        if is_noise_bracket(&caps[1]) { String::new() } else { caps[0].to_string() }
+        if is_noise_bracket(&caps[1]) {
+            String::new()
+        } else {
+            caps[0].to_string()
+        }
     });
     let t = re_music.replace_all(&t, "");
     let t = t.trim().to_string();
 
-    if t.is_empty() { None } else { Some(t) }
+    if t.is_empty() {
+        None
+    } else {
+        Some(t)
+    }
 }
 
 fn ends_sentence(word: &str) -> bool {
@@ -145,31 +178,37 @@ fn wrap_text(text: &str, _max_chars: usize) -> String {
     text.to_string()
 }
 
-
 // ── cue grouping ──────────────────────────────────────────────────────────────
 
 pub fn group_into_cues(events: Vec<Event>) -> Vec<SubCue> {
-    const MAX_WORDS:   usize = 15;
-    const MAX_DUR:     i64   = 6_000;
-    const MAX_CUE_DUR: i64   = 8_000;
+    const MAX_WORDS: usize = 15;
+    const MAX_DUR: i64 = 6_000;
+    const MAX_CUE_DUR: i64 = 8_000;
 
     let mut cues: Vec<SubCue> = Vec::new();
 
-    let mut buf_words:   Vec<String> = Vec::new();
-    let mut buf_start:   i64         = 0;
-    let mut buf_last_ms: i64         = 0;
+    let mut buf_words: Vec<String> = Vec::new();
+    let mut buf_start: i64 = 0;
+    let mut buf_last_ms: i64 = 0;
 
     let flush = |buf_words: &mut Vec<String>,
-                     buf_start: &mut i64,
-                     buf_last_ms: &mut i64,
-                     next_start_ms: i64,
-                     cues: &mut Vec<SubCue>| {
-        if buf_words.is_empty() { return; }
-        let text   = wrap_text(&buf_words.join(" "), 42);
+                 buf_start: &mut i64,
+                 buf_last_ms: &mut i64,
+                 next_start_ms: i64,
+                 cues: &mut Vec<SubCue>| {
+        if buf_words.is_empty() {
+            return;
+        }
+        let text = wrap_text(&buf_words.join(" "), 42);
         let end_ms = next_start_ms
             .saturating_sub(10)
             .min(*buf_start + MAX_CUE_DUR);
-        cues.push(SubCue { index: 0, start_ms: *buf_start, end_ms, text });
+        cues.push(SubCue {
+            index: 0,
+            start_ms: *buf_start,
+            end_ms,
+            text,
+        });
         buf_words.clear();
         *buf_last_ms = next_start_ms;
     };
@@ -177,17 +216,24 @@ pub fn group_into_cues(events: Vec<Event>) -> Vec<SubCue> {
     for (i, event) in events.iter().enumerate() {
         if let Some(_trusted_dur) = event.end_ms {
             flush(
-                &mut buf_words, &mut buf_start, &mut buf_last_ms,
-                event.start_ms, &mut cues,
+                &mut buf_words,
+                &mut buf_start,
+                &mut buf_last_ms,
+                event.start_ms,
+                &mut cues,
             );
 
-            let clean_tokens: Vec<String> = event.text
+            let clean_tokens: Vec<String> = event
+                .text
                 .split_whitespace()
                 .filter_map(clean_word)
                 .collect();
-            if clean_tokens.is_empty() { continue; }
+            if clean_tokens.is_empty() {
+                continue;
+            }
 
-            let next_start = events.get(i + 1)
+            let next_start = events
+                .get(i + 1)
                 .map(|e| e.start_ms)
                 .unwrap_or(event.start_ms + 1_500);
             let end_ms = next_start
@@ -195,28 +241,39 @@ pub fn group_into_cues(events: Vec<Event>) -> Vec<SubCue> {
                 .min(event.start_ms + MAX_CUE_DUR);
 
             let text = wrap_text(&clean_tokens.join(" "), 42);
-            cues.push(SubCue { index: 0, start_ms: event.start_ms, end_ms, text });
+            cues.push(SubCue {
+                index: 0,
+                start_ms: event.start_ms,
+                end_ms,
+                text,
+            });
             buf_last_ms = end_ms;
             continue;
         }
 
         for token in event.text.split_whitespace() {
             if let Some(clean) = clean_word(token) {
-                if buf_words.is_empty() { buf_start = event.start_ms; }
+                if buf_words.is_empty() {
+                    buf_start = event.start_ms;
+                }
                 buf_words.push(clean.clone());
                 buf_last_ms = event.start_ms;
 
-                let dur         = event.start_ms - buf_start;
+                let dur = event.start_ms - buf_start;
                 let at_sentence = ends_sentence(&clean);
-                let at_limit    = buf_words.len() >= MAX_WORDS || dur >= MAX_DUR;
+                let at_limit = buf_words.len() >= MAX_WORDS || dur >= MAX_DUR;
 
                 if at_sentence || at_limit {
-                    let next_ms = events.get(i + 1)
+                    let next_ms = events
+                        .get(i + 1)
                         .map(|e| e.start_ms)
                         .unwrap_or(buf_last_ms + 1_500);
                     flush(
-                        &mut buf_words, &mut buf_start, &mut buf_last_ms,
-                        next_ms, &mut cues,
+                        &mut buf_words,
+                        &mut buf_start,
+                        &mut buf_last_ms,
+                        next_ms,
+                        &mut cues,
                     );
                 }
             }
@@ -226,10 +283,10 @@ pub fn group_into_cues(events: Vec<Event>) -> Vec<SubCue> {
     if !buf_words.is_empty() {
         let end_ms = (buf_last_ms + 1_500).min(buf_start + MAX_CUE_DUR);
         cues.push(SubCue {
-            index:    0,
+            index: 0,
             start_ms: buf_start,
             end_ms,
-            text:     wrap_text(&buf_words.join(" "), 42),
+            text: wrap_text(&buf_words.join(" "), 42),
         });
     }
 
@@ -240,11 +297,10 @@ pub fn group_into_cues(events: Vec<Event>) -> Vec<SubCue> {
     cues
 }
 
-
 // ── public entry point ────────────────────────────────────────────────────────
 
 pub fn process_json3(input_path: &str) -> Result<Vec<SubCue>, Box<dyn std::error::Error>> {
-    let bytes  = fs::read(input_path)?;
+    let bytes = fs::read(input_path)?;
     let events = parse_json3(&bytes);
     if events.is_empty() {
         return Err("No events found in json3 file.".into());

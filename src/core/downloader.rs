@@ -23,30 +23,48 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::types::{Playlist, PlaylistVideo, SubType};
 
-
 // ── browser detection ─────────────────────────────────────────────────────────
 
 const BROWSER_PRIORITY: &[(&str, &[&str])] = &[
-    ("firefox",  &["firefox"]),
-    ("chrome",   &["google-chrome", "google-chrome-stable", "chrome"]),
-    ("brave",    &["brave-browser", "brave"]),
-    ("edge",     &["microsoft-edge", "msedge"]),
+    ("firefox", &["firefox"]),
+    (
+        "chrome",
+        &["google-chrome", "google-chrome-stable", "chrome"],
+    ),
+    ("brave", &["brave-browser", "brave"]),
+    ("edge", &["microsoft-edge", "msedge"]),
     ("chromium", &["chromium-browser", "chromium"]),
-    ("opera",    &["opera"]),
-    ("vivaldi",  &["vivaldi"]),
+    ("opera", &["opera"]),
+    ("vivaldi", &["vivaldi"]),
 ];
 
 fn is_installed(exe: &str) -> bool {
     #[cfg(unix)]
-    { Command::new("which").arg(exe).stdout(Stdio::null()).stderr(Stdio::null())
-        .status().map(|s| s.success()).unwrap_or(false) }
+    {
+        Command::new("which")
+            .arg(exe)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
     #[cfg(windows)]
-    { Command::new("where").arg(exe).stdout(Stdio::null()).stderr(Stdio::null())
-        .status().map(|s| s.success()).unwrap_or(false) }
+    {
+        Command::new("where")
+            .arg(exe)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
 }
 
 pub fn require_yt_dlp() {
-    if is_installed("yt-dlp") { return; }
+    if is_installed("yt-dlp") {
+        return;
+    }
     eprintln!();
     eprintln!("  \x1b[1;31m✗\x1b[0m  yt-dlp not found");
     eprintln!();
@@ -63,7 +81,9 @@ pub fn require_yt_dlp() {
 }
 
 pub fn require_ffmpeg() {
-    if is_installed("ffmpeg") { return; }
+    if is_installed("ffmpeg") {
+        return;
+    }
     eprintln!();
     eprintln!("  \x1b[1;31m✗\x1b[0m  ffmpeg not found");
     eprintln!();
@@ -87,7 +107,6 @@ pub fn detect_browser() -> Option<String> {
     None
 }
 
-
 // ── paths ─────────────────────────────────────────────────────────────────────
 
 pub fn get_downloads_dir() -> PathBuf {
@@ -102,11 +121,13 @@ pub fn get_downloads_dir() -> PathBuf {
 /// or falls back to the default Downloads folder.
 pub fn resolve_output_dir(custom: &Option<PathBuf>) -> PathBuf {
     match custom {
-        Some(p) => { let _ = std::fs::create_dir_all(p); p.clone() }
-        None    => get_downloads_dir(),
+        Some(p) => {
+            let _ = std::fs::create_dir_all(p);
+            p.clone()
+        }
+        None => get_downloads_dir(),
     }
 }
-
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -118,9 +139,13 @@ pub fn temp_id() -> String {
 }
 
 fn clean_filename(raw: &str) -> String {
-    let re    = Regex::new(r#"[\\/*?:"<>|]"#).unwrap();
+    let re = Regex::new(r#"[\\/*?:"<>|]"#).unwrap();
     let clean = re.replace_all(raw, "").trim().to_string();
-    if clean.is_empty() { "untitled".to_string() } else { clean }
+    if clean.is_empty() {
+        "untitled".to_string()
+    } else {
+        clean
+    }
 }
 
 fn build_yt_dlp(base_args: &[&str], browser: Option<&str>, url: &str) -> Command {
@@ -129,39 +154,65 @@ fn build_yt_dlp(base_args: &[&str], browser: Option<&str>, url: &str) -> Command
     if let Some(b) = browser {
         cmd.args(["--cookies-from-browser", b]);
     }
+    // "--" marks the end of options, so `url` can never be misread as a yt-dlp flag.
+    cmd.arg("--");
     cmd.arg(url);
     cmd.stderr(Stdio::null());
     cmd
 }
 
 fn opt_browser(browser: &str) -> Option<&str> {
-    if browser.is_empty() { None } else { Some(browser) }
+    if browser.is_empty() {
+        None
+    } else {
+        Some(browser)
+    }
 }
-
 
 // ── video title ───────────────────────────────────────────────────────────────
 
 fn try_get_title(url: &str, browser: Option<&str>) -> Option<String> {
     let output = build_yt_dlp(
-        &["--get-title", "--no-check-certificates", "--sleep-requests", "2"],
+        &[
+            "--get-title",
+            "--no-check-certificates",
+            "--sleep-requests",
+            "2",
+        ],
         browser,
         url,
     )
     .output()
     .ok()?;
 
-    if !output.status.success() { return None; }
+    if !output.status.success() {
+        return None;
+    }
     let title = clean_filename(String::from_utf8_lossy(&output.stdout).trim());
-    if title.is_empty() { None } else { Some(title) }
+    if title.is_empty() {
+        None
+    } else {
+        Some(title)
+    }
 }
 
 pub fn get_video_title(url: &str, browser: &str) -> String {
-    if let Some(t) = try_get_title(url, opt_browser(browser)) { return t; }
+    if let Some(t) = try_get_title(url, opt_browser(browser)) {
+        return t;
+    }
 
     eprintln!("  [warn] Could not fetch title; using 'subtitles'.");
     "subtitles".to_string()
 }
 
+// ── URL validation ────────────────────────────────────────────────────────────
+
+/// Returns true if `url` looks like a YouTube video or playlist URL.
+pub fn is_valid_youtube_url(url: &str) -> bool {
+    let lower = url.to_lowercase();
+    (lower.starts_with("http://") || lower.starts_with("https://"))
+        && (lower.contains("youtube.com") || lower.contains("youtu.be"))
+}
 
 // ── playlist ──────────────────────────────────────────────────────────────────
 
@@ -169,7 +220,10 @@ pub fn is_playlist_url(url: &str) -> bool {
     url.contains("list=") || url.contains("/playlist")
 }
 
-fn try_fetch_playlist(url: &str, browser: Option<&str>) -> Result<Playlist, Box<dyn std::error::Error>> {
+fn try_fetch_playlist(
+    url: &str,
+    browser: Option<&str>,
+) -> Result<Playlist, Box<dyn std::error::Error>> {
     let output = build_yt_dlp(
         &["--flat-playlist", "-J", "--no-check-certificates"],
         browser,
@@ -184,7 +238,9 @@ fn try_fetch_playlist(url: &str, browser: Option<&str>) -> Result<Playlist, Box<
     let json: Value = serde_json::from_slice(&output.stdout)?;
 
     let title = clean_filename(
-        json.get("title").and_then(|v| v.as_str()).unwrap_or("playlist"),
+        json.get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("playlist"),
     );
 
     let videos: Vec<PlaylistVideo> = json
@@ -193,7 +249,8 @@ fn try_fetch_playlist(url: &str, browser: Option<&str>) -> Result<Playlist, Box<
         .unwrap_or(&vec![])
         .iter()
         .filter_map(|entry| {
-            let raw_url = entry.get("webpage_url")
+            let raw_url = entry
+                .get("webpage_url")
                 .or_else(|| entry.get("url"))
                 .and_then(|v| v.as_str())?;
 
@@ -204,10 +261,16 @@ fn try_fetch_playlist(url: &str, browser: Option<&str>) -> Result<Playlist, Box<
             };
 
             let video_title = clean_filename(
-                entry.get("title").and_then(|v| v.as_str()).unwrap_or("video"),
+                entry
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("video"),
             );
 
-            Some(PlaylistVideo { url: video_url, title: video_title })
+            Some(PlaylistVideo {
+                url: video_url,
+                title: video_title,
+            })
         })
         .collect();
 
@@ -217,7 +280,6 @@ fn try_fetch_playlist(url: &str, browser: Option<&str>) -> Result<Playlist, Box<
 pub fn fetch_playlist(url: &str, browser: &str) -> Result<Playlist, Box<dyn std::error::Error>> {
     try_fetch_playlist(url, opt_browser(browser))
 }
-
 
 // ── language listing ──────────────────────────────────────────────────────────
 
@@ -235,27 +297,29 @@ fn query_sub_langs(url: &str, sub_type: &SubType, browser: Option<&str>) -> Vec<
     };
 
     let json: Value = match serde_json::from_str(&stdout) {
-        Ok(v)  => v,
-        Err(e) => { eprintln!("  [warn] JSON parse error: {e}"); return Vec::new(); }
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("  [warn] JSON parse error: {e}");
+            return Vec::new();
+        }
     };
 
     let field = match sub_type {
         SubType::Manual => "subtitles",
-        SubType::Auto   => "automatic_captions",
+        SubType::Auto => "automatic_captions",
     };
 
     let map = match json.get(field).and_then(|v| v.as_object()) {
         Some(m) => m,
-        None    => return Vec::new(),
+        None => return Vec::new(),
     };
 
     let mut langs: Vec<String> = map
         .iter()
         .filter(|(_, formats)| {
             formats.as_array().is_some_and(|arr| {
-                arr.iter().any(|f| {
-                    f.get("ext").and_then(|e| e.as_str()) == Some("json3")
-                })
+                arr.iter()
+                    .any(|f| f.get("ext").and_then(|e| e.as_str()) == Some("json3"))
             })
         })
         .map(|(k, _)| k.clone())
@@ -269,19 +333,18 @@ pub fn list_available_subs(url: &str, sub_type: &SubType, browser: &str) -> Vec<
     query_sub_langs(url, sub_type, opt_browser(browser))
 }
 
-
 // ── downloading ───────────────────────────────────────────────────────────────
 
 fn run_download_json3(
-    url:         &str,
-    language:    &str,
-    sub_type:    &SubType,
+    url: &str,
+    language: &str,
+    sub_type: &SubType,
     temp_prefix: &str,
-    browser:     Option<&str>,
+    browser: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let sub_flag = match sub_type {
         SubType::Manual => "--write-subs",
-        SubType::Auto   => "--write-auto-subs",
+        SubType::Auto => "--write-auto-subs",
     };
     let output_template = format!("{temp_prefix}.%(ext)s");
 
@@ -289,13 +352,19 @@ fn run_download_json3(
         "--skip-download",
         "--no-warnings",
         sub_flag,
-        "--sub-langs",            language,
-        "--sub-format",           "json3",
-        "-o",                     &output_template,
+        "--sub-langs",
+        language,
+        "--sub-format",
+        "json3",
+        "-o",
+        &output_template,
         "--no-check-certificates",
-        "--sleep-requests",       "3",
-        "--extractor-retries",    "5",
-        "--retry-sleep",          "exp=1:30",
+        "--sleep-requests",
+        "3",
+        "--extractor-retries",
+        "5",
+        "--retry-sleep",
+        "exp=1:30",
     ];
 
     let status = build_yt_dlp(base, browser, url).status()?;
@@ -309,25 +378,28 @@ fn run_download_json3(
         found.push(path.to_string_lossy().into_owned());
     }
 
-    found.into_iter().next().ok_or_else(|| "No json3 file was downloaded.".into())
+    found
+        .into_iter()
+        .next()
+        .ok_or_else(|| "No json3 file was downloaded.".into())
 }
 
 fn download_json3(
-    url:         &str,
-    language:    &str,
-    sub_type:    &SubType,
+    url: &str,
+    language: &str,
+    sub_type: &SubType,
     temp_prefix: &str,
-    browser:     &str,
+    browser: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     run_download_json3(url, language, sub_type, temp_prefix, opt_browser(browser))
 }
 
 pub fn download_with_retry(
-    url:         &str,
-    language:    &str,
-    sub_type:    &SubType,
+    url: &str,
+    language: &str,
+    sub_type: &SubType,
     temp_prefix: &str,
-    browser:     &str,
+    browser: &str,
     max_retries: u32,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut last_err = String::new();
@@ -340,7 +412,7 @@ pub fn download_with_retry(
         }
         match download_json3(url, language, sub_type, temp_prefix, browser) {
             Ok(path) => return Ok(path),
-            Err(e)   => last_err = e.to_string(),
+            Err(e) => last_err = e.to_string(),
         }
     }
 

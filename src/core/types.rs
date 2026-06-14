@@ -20,17 +20,17 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct Event {
     pub start_ms: i64,
-    pub end_ms:   Option<i64>,
-    pub text:     String,
+    pub end_ms: Option<i64>,
+    pub text: String,
 }
 
 /// A cleaned, timed subtitle cue ready to be written to any format.
 #[derive(Debug, Clone)]
 pub struct SubCue {
-    pub index:    usize,
+    pub index: usize,
     pub start_ms: i64,
-    pub end_ms:   i64,
-    pub text:     String,
+    pub end_ms: i64,
+    pub text: String,
 }
 
 /// Output subtitle format.
@@ -50,14 +50,14 @@ pub enum SubType {
 /// A single video entry inside a playlist.
 #[derive(Debug, Clone)]
 pub struct PlaylistVideo {
-    pub url:   String,
+    pub url: String,
     pub title: String,
 }
 
 /// A YouTube playlist with its title and video list.
 #[derive(Debug, Clone)]
 pub struct Playlist {
-    pub title:  String,
+    pub title: String,
     pub videos: Vec<PlaylistVideo>,
 }
 
@@ -71,8 +71,8 @@ pub struct SubEntry {
 /// A video file matched with its subtitle(s), ready to be merged.
 #[derive(Debug, Clone)]
 pub struct MergeJob {
-    pub video_path:  PathBuf,
-    pub subs:        Vec<SubEntry>,
+    pub video_path: PathBuf,
+    pub subs: Vec<SubEntry>,
     pub output_name: String,
     /// 1 = ID match, 2 = title match, 3 = position match (fallback)
     pub match_stage: u8,
