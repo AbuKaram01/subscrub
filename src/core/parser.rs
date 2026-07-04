@@ -118,47 +118,15 @@ pub fn parse_json3(bytes: &[u8]) -> Vec<Event> {
 
 // ── cleaning ──────────────────────────────────────────────────────────────────
 
-fn is_noise_bracket(inner: &str) -> bool {
-    let lower = inner.to_lowercase();
-    if !inner.chars().any(|c| c.is_alphabetic()) {
-        return true;
-    }
-    const NOISE: &[&str] = &[
-        "music",
-        "applause",
-        "laughter",
-        "cheering",
-        "singing",
-        "موسيقى",
-        "تصفيق",
-        "ضحك",
-        "silence",
-        "background noise",
-        "indistinct",
-        "inaudible",
-        "crosstalk",
-    ];
-    NOISE.iter().any(|n| lower.contains(n))
-}
-
 fn clean_word(word: &str) -> Option<String> {
     use std::sync::OnceLock;
     static RE_HTML: OnceLock<Regex> = OnceLock::new();
-    static RE_BRACKETS: OnceLock<Regex> = OnceLock::new();
     static RE_MUSIC: OnceLock<Regex> = OnceLock::new();
 
     let re_html = RE_HTML.get_or_init(|| Regex::new(r"<[^>]+>").unwrap());
-    let re_brackets = RE_BRACKETS.get_or_init(|| Regex::new(r"\[([^\]]*)\]").unwrap());
     let re_music = RE_MUSIC.get_or_init(|| Regex::new(r"[♪♫]+").unwrap());
 
     let t = re_html.replace_all(word, "");
-    let t = re_brackets.replace_all(&t, |caps: &regex::Captures| {
-        if is_noise_bracket(&caps[1]) {
-            String::new()
-        } else {
-            caps[0].to_string()
-        }
-    });
     let t = re_music.replace_all(&t, "");
     let t = t.trim().to_string();
 

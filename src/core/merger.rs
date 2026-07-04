@@ -21,6 +21,7 @@ use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
 use super::types::{MergeJob, SubEntry};
+use super::util::{clean_filename, unique_path};
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -77,18 +78,6 @@ fn parse_sub_name(filename: &str) -> (String, String) {
         .unwrap_or(filename)
         .to_string();
     (stem, "und".to_string())
-}
-
-/// Removes filesystem-unsafe characters from a title for use as a filename.
-fn clean_filename(s: &str) -> String {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    let re = RE.get_or_init(|| Regex::new(r#"[\\/*?:"<>|]"#).unwrap());
-    let clean = re.replace_all(s.trim(), "").trim().to_string();
-    if clean.is_empty() {
-        "untitled".to_string()
-    } else {
-        clean
-    }
 }
 
 fn read_files(dir: &Path, extensions: &[&str]) -> Vec<PathBuf> {
@@ -326,8 +315,13 @@ fn count_subtitle_streams(video_path: &Path) -> usize {
 
 /// Embeds all subtitle tracks in `job` into a new MKV file using ffmpeg.
 /// Language metadata is set for each track so media players display it correctly.
-pub fn merge_video(job: &MergeJob, output_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let output_path = output_dir.join(format!("{}.mkv", job.output_name));
+/// Returns the actual path written to (may differ from the "natural" name if
+/// a file with that name already existed).
+pub fn merge_video(
+    job: &MergeJob,
+    output_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let output_path = unique_path(&output_dir.join(format!("{}.mkv", job.output_name)));
     let existing_sub_cnt = count_subtitle_streams(&job.video_path);
 
     let mut cmd = Command::new("ffmpeg");
@@ -367,7 +361,7 @@ pub fn merge_video(job: &MergeJob, output_dir: &Path) -> Result<(), Box<dyn std:
         .into());
     }
 
-    Ok(())
+    Ok(output_path)
 }
 
 // ── single file merge ─────────────────────────────────────────────────────────
@@ -375,7 +369,9 @@ pub fn merge_video(job: &MergeJob, output_dir: &Path) -> Result<(), Box<dyn std:
 /// Embeds one or more subtitle files into a single video.
 ///
 /// If `output_dir` is `Some`, the merged file is written there; otherwise it
-/// is written next to the source video.
+/// is written next to the source video. Returns the actual path written to
+/// (may differ from the "natural" name to avoid clobbering the source file
+/// or an existing output).
 pub fn merge_single(
     video_path: &Path,
     sub_paths: &[PathBuf],
@@ -388,11 +384,12 @@ pub fn merge_single(
     // If output would overwrite the source file (e.g. input is already .mkv),
     // append _merged to avoid ffmpeg reading and writing the same file.
     let candidate = output_dir.join(format!("{output_name}.mkv"));
-    let output_path = if candidate == video_path {
+    let candidate = if candidate == video_path {
         output_dir.join(format!("{output_name}_merged.mkv"))
     } else {
         candidate
     };
+    let output_path = unique_path(&candidate);
 
     let mut cmd = Command::new("ffmpeg");
     cmd.arg("-y");

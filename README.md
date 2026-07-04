@@ -14,7 +14,9 @@ Download subtitles directly from YouTube, remove formatting noise and HTML artif
 
 - Download subtitles from single videos or entire playlists
     
-- Support for manual and auto-generated subtitles
+- Manual and auto-generated subtitles shown together in interactive mode — pick across both in one step
+    
+- List every available language for a video with `subscrub languages`, no download required
     
 - Download one or multiple languages at once
     
@@ -48,6 +50,13 @@ Download subtitles directly from YouTube, remove formatting noise and HTML artif
 - Smart matching by YouTube ID, title, or alphabetical order
     
 
+### Safety
+
+- Never overwrites an existing file — if the target name is already taken, subscrub automatically saves as `name (1)`, `name (2)`, etc.
+    
+- Applies to downloaded subtitles, merged folders, and single merges alike
+    
+
 ### Automation
 
 - Interactive terminal interface
@@ -65,19 +74,33 @@ Download subtitles directly from YouTube, remove formatting noise and HTML artif
 
 subscrub depends on the following tools:
 
-|Dependency|Purpose|
-|---|---|
-|yt-dlp|Access YouTube subtitle data|
-|ffmpeg|Merge subtitles into videos|
-|Deno|Runtime required by subscrub|
+|Dependency|Purpose|Required for|
+|---|---|---|
+|yt-dlp|Fetches subtitle data from YouTube|Download|
+|Deno|JavaScript runtime used internally by yt-dlp to solve YouTube's signature/challenge scripts|Download|
+|ffmpeg|Embeds subtitles into video files|Merge|
 
-Install Deno:
+subscrub itself doesn't call Deno directly — it's a dependency of `yt-dlp`, which needs a real JS runtime to keep working as YouTube's anti-bot challenges evolve. Because of this, subscrub only checks for Deno when you run it in **download** mode; merge mode only requires `ffmpeg`.
+
+### Installing yt-dlp and ffmpeg
+
+|Platform|yt-dlp|ffmpeg|
+|---|---|---|
+|Debian / Ubuntu|`sudo apt install yt-dlp`|`sudo apt install ffmpeg`|
+|Fedora / RHEL|`sudo dnf install yt-dlp`|`sudo dnf install ffmpeg`|
+|Arch Linux|`sudo pacman -S yt-dlp`|`sudo pacman -S ffmpeg`|
+|openSUSE|`sudo zypper install yt-dlp`|`sudo zypper install ffmpeg`|
+
+A few notes:
+
+- Distro-packaged `yt-dlp` can lag behind upstream. If YouTube extraction starts failing, update with `yt-dlp -U` (or `pip install -U yt-dlp`) before filing a bug.
+- On Fedora, plain `dnf install ffmpeg` (or the `ffmpeg-free` package) is enough for subscrub — merging only stream-copies your existing video/audio and re-encodes the subtitle track, so the patented codecs behind RPM Fusion's full build aren't needed.
+
+### Installing Deno
 
 ```bash
 curl -fsSL https://deno.land/install.sh | sh
 ```
-
-Install `yt-dlp` and `ffmpeg` using your distribution's package manager.
 
 ---
 
@@ -139,7 +162,7 @@ What do you want to do?
 ### Single video
 
 ```bash
-subscrub \
+subscrub download \
     --url "https://youtube.com/watch?v=..." \
     --type auto \
     --lang ar,en \
@@ -150,12 +173,31 @@ subscrub \
 ### Playlist
 
 ```bash
-subscrub \
+subscrub download \
     --url "https://youtube.com/playlist?list=..." \
     --type auto \
     --lang ar,en \
     --format vtt \
     --output "/path/to/output"
+```
+
+### Checking available languages first
+
+Not sure what's available before writing the `--lang` list? List every manual and auto-generated language for a video without downloading anything:
+
+```bash
+subscrub languages --url "https://youtube.com/watch?v=..."
+```
+
+### Interactive mode
+
+Running `subscrub download` with no flags drops you into a guided session. Manual and auto-generated languages are shown together in a single list, each tagged with its type, so you can pick across both in one step — no separate "subtitle type" prompt to get stuck on if a video only has one kind:
+
+```text
+> Select languages  (type to search, Space = toggle, Enter = confirm)
+  ar  ·  manual
+  ar  ·  auto
+  en  ·  auto
 ```
 
 ---
@@ -165,21 +207,19 @@ subscrub \
 ### Folder mode
 
 ```bash
-subscrub \
-    --merge \
+subscrub merge folder \
     --videos-dir "/path/to/videos" \
-    --subs-dir "/path/to/subtitles"
+    --subs-dir "/path/to/subtitles" \
     --output "/path/to/output"
 ```
 
 ### Single file mode
 
 ```bash
-subscrub \
-    --merge \
+subscrub merge single \
     --video "/path/to/video.mkv" \
     --sub "/path/to/sub_ar.srt" \
-    --sub "/path/to/sub_en.srt"
+    --sub "/path/to/sub_en.srt" \
     --output "/path/to/output"
 ```
 
@@ -187,21 +227,23 @@ subscrub \
 
 # Browser Selection
 
-By default, subscrub automatically detects an installed browser using the following priority:
+By default, `subscrub download` automatically detects an installed browser (used for cookie authentication) using the following priority:
 
 ```
 Firefox → Chrome → Brave → Edge → Chromium → Opera → Vivaldi
 ```
 
-To override automatic detection:
+Merge mode doesn't need a browser at all. To override automatic detection for downloads:
 
 ```bash
-subscrub --browser brave
+subscrub download --browser brave --url "..." --type auto --lang ar --format srt
 ```
 
 ---
 
 # Command Line Options
+
+### `subscrub download`
 
 |Flag|Short|Description|
 |---|---|---|
@@ -209,13 +251,35 @@ subscrub --browser brave
 |`--type`|`-t`|`manual` or `auto` subtitles|
 |`--lang`|`-l`|Comma-separated language codes (`ar,en,fr`)|
 |`--format`|`-f`|`vtt` or `srt`|
+|`--output`|`-o`|Output folder|
 |`--browser`|`-b`|Browser used for cookie authentication|
-|`--output`|`-o`|Output directory|
-|`--merge`||Enable merge mode|
-|`--videos-dir`||Videos directory (folder mode)|
-|`--subs-dir`||Subtitle directory (folder mode)|
-|`--video`||Single video file|
-|`--sub`||Subtitle file (repeatable)|
+
+`--url`, `--type`, `--lang`, and `--format` must be given together to skip the interactive prompts; provide none of them and subscrub will guide you through it.
+
+### `subscrub languages`
+
+|Flag|Short|Description|
+|---|---|---|
+|`--url`||YouTube video or playlist URL|
+|`--browser`|`-b`|Browser used for cookie authentication|
+
+Lists every available manual and auto-generated language for `--url` and exits — no download, no other flags needed.
+
+### `subscrub merge folder`
+
+|Flag|Short|Description|
+|---|---|---|
+|`--videos-dir`||Videos folder path|
+|`--subs-dir`||Subtitles folder path|
+|`--output`|`-o`|Output folder|
+
+### `subscrub merge single`
+
+|Flag|Short|Description|
+|---|---|---|
+|`--video`||Video file path|
+|`--sub`||Subtitle file path (repeatable, at least one required)|
+|`--output`|`-o`|Output folder — defaults to alongside the source video|
 
 ---
 
@@ -227,6 +291,7 @@ subscrub can also be embedded into Rust applications.
 use subscrub::core::{
     downloader::{detect_browser, list_available_subs, download_with_retry},
     parser::process_json3,
+    util::unique_path,
     writer::write_vtt,
     merger::{match_videos_to_subs, merge_video, merge_single},
 };
@@ -282,4 +347,4 @@ Copyright (C) 2026 AbuKaram01
 
 This program is free software: you can redistribute it and/or modify it under the terms of the **GNU General Public License v3.0** or any later version.
 
-See the **LICENSE** file for the full license text.
+See the [LICENSE](LICENSE) file for the full license text.

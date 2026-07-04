@@ -15,13 +15,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use glob::glob;
-use regex::Regex;
 use serde_json::Value;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::types::{Playlist, PlaylistVideo, SubType};
+use super::util::clean_filename;
 
 // ── browser detection ─────────────────────────────────────────────────────────
 
@@ -61,41 +61,31 @@ fn is_installed(exe: &str) -> bool {
     }
 }
 
-pub fn require_yt_dlp() {
-    if is_installed("yt-dlp") {
-        return;
+// ── dependency checks ─────────────────────────────────────────────────────────
+//
+// These are pure checks: they report a problem, they don't print anything or
+// exit the process themselves. Callers (the `commands` layer) decide how and
+// when to surface the error, which makes this logic testable and reusable.
+
+fn require_tool(exe: &str, display_name: &str) -> Result<(), String> {
+    if is_installed(exe) {
+        return Ok(());
     }
-    eprintln!();
-    eprintln!("  \x1b[1;31m✗\x1b[0m  yt-dlp not found");
-    eprintln!();
-    eprintln!("     subscrub requires yt-dlp to download subtitles.");
-    eprintln!("     Install it with one of:");
-    eprintln!();
-    eprintln!("       Debian/Ubuntu : sudo apt install yt-dlp");
-    eprintln!("       Fedora        : sudo dnf install yt-dlp");
-    eprintln!("       Arch          : sudo pacman -S yt-dlp");
-    eprintln!("       pip           : pip install yt-dlp");
-    eprintln!("       GitHub        : https://github.com/yt-dlp/yt-dlp");
-    eprintln!();
-    std::process::exit(1);
+    Err(format!(
+        "{display_name} not found — see the README for setup instructions."
+    ))
 }
 
-pub fn require_ffmpeg() {
-    if is_installed("ffmpeg") {
-        return;
-    }
-    eprintln!();
-    eprintln!("  \x1b[1;31m✗\x1b[0m  ffmpeg not found");
-    eprintln!();
-    eprintln!("     subscrub requires ffmpeg to embed subtitles into videos.");
-    eprintln!("     Install it with one of:");
-    eprintln!();
-    eprintln!("       Debian/Ubuntu : sudo apt install ffmpeg");
-    eprintln!("       Fedora        : sudo dnf install ffmpeg");
-    eprintln!("       Arch          : sudo pacman -S ffmpeg");
-    eprintln!("       GitHub        : https://ffmpeg.org/download.html");
-    eprintln!();
-    std::process::exit(1);
+pub fn require_yt_dlp() -> Result<(), String> {
+    require_tool("yt-dlp", "yt-dlp")
+}
+
+pub fn require_ffmpeg() -> Result<(), String> {
+    require_tool("ffmpeg", "ffmpeg")
+}
+
+pub fn require_deno() -> Result<(), String> {
+    require_tool("deno", "deno")
 }
 
 pub fn detect_browser() -> Option<String> {
@@ -136,16 +126,6 @@ pub fn temp_id() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| format!("{:016x}", d.as_nanos()))
         .unwrap_or_else(|_| "0".to_string())
-}
-
-fn clean_filename(raw: &str) -> String {
-    let re = Regex::new(r#"[\\/*?:"<>|]"#).unwrap();
-    let clean = re.replace_all(raw, "").trim().to_string();
-    if clean.is_empty() {
-        "untitled".to_string()
-    } else {
-        clean
-    }
 }
 
 fn build_yt_dlp(base_args: &[&str], browser: Option<&str>, url: &str) -> Command {

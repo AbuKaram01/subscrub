@@ -14,9 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-pub mod downloader;
-pub mod merger;
-pub mod parser;
-pub mod types;
-pub mod util;
-pub mod writer;
+//! Orchestration layer: wires `cli` (input/prompts) to `core` (domain logic)
+//! for each top-level command. This is the only layer allowed to call
+//! `std::process::exit` — `core` reports problems via `Result`, `cli`
+//! collects input, and `commands` decides what a failure means for the run.
+
+pub mod download;
+pub mod merge;
+
+use console::style;
+
+/// Prints a formatted error line and exits with status 1. The single place
+/// that turns a `Result::Err` from validation or a dependency check into
+/// the CLI's standard error format.
+pub fn fail(msg: impl std::fmt::Display) -> ! {
+    eprintln!("\n  {}  {}\n", style("✗").red().bold(), msg);
+    std::process::exit(1);
+}

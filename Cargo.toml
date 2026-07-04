@@ -1,11 +1,11 @@
 [package]
 name        = "subscrub"
-version     = "0.1.0"
+version     = "1.0.0"
 edition     = "2021"
 description = "Download & clean YouTube subtitles"
 license     = "GPL-3.0-or-later"
 authors     = ["AbuKaram01"]
-repository  = "https://github.com/AbuKaram01/subget"
+repository  = "https://github.com/AbuKaram01/subscrub"
 readme      = "README.md"
 
 [lib]
