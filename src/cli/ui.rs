@@ -238,8 +238,10 @@ pub fn ask_format() -> SubFormat {
 }
 
 /// Asks for an optional output folder. Empty input keeps the default location.
-/// Keeps prompting until the folder actually exists or can be created there
-/// (catches typos, bad permissions, or a path that points at an existing file).
+/// Keeps prompting until the folder actually exists (or can be created) AND
+/// is genuinely writable. `create_dir_all` alone isn't enough: it succeeds
+/// trivially for a path like "/" that already exists, even for a user with
+/// no write access there — so we also try writing a small probe file.
 pub fn ask_output_dir(default_hint: &str) -> Option<PathBuf> {
     let prompt = format!("Save folder  (Enter = {default_hint}):");
     loop {
@@ -251,16 +253,26 @@ pub fn ask_output_dir(default_hint: &str) -> Option<PathBuf> {
         }
 
         let path = PathBuf::from(trimmed);
-        match fs::create_dir_all(&path) {
+        match fs::create_dir_all(&path).and_then(|()| probe_writable(&path)) {
             Ok(()) => return Some(path),
             Err(e) => {
                 eprintln!(
-                    "  {}  Can't use that folder ({e}) — try again.",
+                    "  {}  Can't write to that folder ({e}) — try again.",
                     style("✗").red().bold()
                 );
             }
         }
     }
+}
+
+/// Actually tests write access to `dir` by creating and immediately
+/// removing a small probe file — the only reliable way to confirm a
+/// directory is writable, since `create_dir_all` alone doesn't check that.
+fn probe_writable(dir: &std::path::Path) -> std::io::Result<()> {
+    let probe = dir.join(format!(".subscrub-write-test-{}", std::process::id()));
+    fs::write(&probe, b"")?;
+    let _ = fs::remove_file(&probe);
+    Ok(())
 }
 
 /// Asks for a folder path and keeps prompting until a valid directory is entered.
@@ -334,4 +346,19 @@ pub fn ask_sub_files() -> Vec<PathBuf> {
         style(names.join("  ·  ")).cyan()
     );
     files
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn probe_writable_succeeds_for_a_normal_writable_dir() {
+        let dir = std::env::temp_dir().join(format!("subscrub-ui-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        assert!(probe_writable(&dir).is_ok());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
