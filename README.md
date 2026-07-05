@@ -23,8 +23,6 @@ Download subtitles directly from YouTube, remove formatting noise and HTML artif
 
 ### Clean
 
-- Remove music symbols and decorative characters
-    
 - Strip HTML artifacts and formatting noise
     
 - Produce clean, readable subtitle files
@@ -67,6 +65,34 @@ Download subtitles directly from YouTube, remove formatting noise and HTML artif
     
 - Exponential back-off retry logic for network failures
     
+
+---
+
+## Before / After
+
+YouTube's auto-generated captions build up each line word by word, re-sending the growing sentence over and over until it's replaced by the next one. Watch with captions on (or open the raw subtitle file) and this is what you get:
+
+**Before (raw YouTube captions):**
+
+```text
+Hello everyone and welcome back
+
+Hello everyone and welcome back
+to the channel
+
+to the channel
+how are you doing today
+```
+
+**After (`subscrub download`):**
+
+```text
+Hello everyone and welcome back
+to the channel
+how are you doing today
+```
+
+Each line appears once, in order, with no repeated text — a normal, readable subtitle file instead of a rolling transcript.
 
 ---
 

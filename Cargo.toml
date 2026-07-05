@@ -1,6 +1,6 @@
 [package]
 name        = "subscrub"
-version     = "1.0.1"
+version     = "1.0.2"
 edition     = "2021"
 description = "Download & clean YouTube subtitles"
 license     = "GPL-3.0-or-later"

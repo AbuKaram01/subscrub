@@ -121,13 +121,10 @@ pub fn parse_json3(bytes: &[u8]) -> Vec<Event> {
 fn clean_word(word: &str) -> Option<String> {
     use std::sync::OnceLock;
     static RE_HTML: OnceLock<Regex> = OnceLock::new();
-    static RE_MUSIC: OnceLock<Regex> = OnceLock::new();
 
     let re_html = RE_HTML.get_or_init(|| Regex::new(r"<[^>]+>").unwrap());
-    let re_music = RE_MUSIC.get_or_init(|| Regex::new(r"[♪♫]+").unwrap());
 
     let t = re_html.replace_all(word, "");
-    let t = re_music.replace_all(&t, "");
     let t = t.trim().to_string();
 
     if t.is_empty() {
