@@ -65,10 +65,15 @@ fn parse_video_name(filename: &str) -> (String, Option<String>) {
 
 /// Splits a subtitle filename into (base title, language code).
 ///
-/// `"My Video - ar.srt"` → `("My Video", "ar")`
+/// `"My Video - ar.srt"` → `("My Video", "ar")`. Also handles the language
+/// variant suffixes YouTube itself produces and subscrub downloads as-is —
+/// `ar-orig` (original-language marker), `zh-Hans`/`zh-Hant` (script), and
+/// `es-419` (numeric region) — not just simple two-letter region codes like
+/// `en-US`.
 fn parse_sub_name(filename: &str) -> (String, String) {
     static RE: OnceLock<Regex> = OnceLock::new();
-    let re = RE.get_or_init(|| Regex::new(r"^(.+) - ([a-z]{2,3}(?:-[A-Z]{2})?)\.[a-z]+$").unwrap());
+    let re = RE
+        .get_or_init(|| Regex::new(r"^(.+) - ([a-zA-Z]{2,3}(?:-[a-zA-Z0-9]+)?)\.[a-z]+$").unwrap());
     if let Some(caps) = re.captures(filename) {
         return (caps[1].to_string(), caps[2].to_string());
     }
@@ -102,59 +107,25 @@ fn read_files(dir: &Path, extensions: &[&str]) -> Vec<PathBuf> {
 
 // ── language helpers ──────────────────────────────────────────────────────────
 
-fn to_iso639_2(lang: &str) -> &str {
-    // Strip region suffix if present (e.g. "en-US" → "en")
+/// Converts a language code (e.g. from a subtitle filename) to an ISO 639-2/3
+/// code suitable for MKV `language` metadata. Backed by the full ISO 639
+/// table via `isolang`, so this covers every language YouTube can produce
+/// auto-translated captions for — not just a hand-picked subset. Falls back
+/// to the original code unchanged if it isn't recognized.
+fn to_iso639_2(lang: &str) -> String {
     let base = lang.split('-').next().unwrap_or(lang);
-    match base {
-        "ar" => "ara",
-        "en" => "eng",
-        "fr" => "fra",
-        "de" => "deu",
-        "es" => "spa",
-        "it" => "ita",
-        "pt" => "por",
-        "ru" => "rus",
-        "zh" => "zho",
-        "ja" => "jpn",
-        "ko" => "kor",
-        "tr" => "tur",
-        "nl" => "nld",
-        "pl" => "pol",
-        "sv" => "swe",
-        "fa" => "fas",
-        "he" => "heb",
-        "ur" => "urd",
-        "id" => "ind",
-        "hi" => "hin",
-        _ => lang,
-    }
+    isolang::Language::from_639_1(base)
+        .map(|l| l.to_639_3().to_string())
+        .unwrap_or_else(|| base.to_string())
 }
 
-fn lang_display_name(lang: &str) -> &str {
+/// Converts a language code to an English display name (e.g. for the MKV
+/// track `title`). See `to_iso639_2` — same table, same fallback behavior.
+fn lang_display_name(lang: &str) -> String {
     let base = lang.split('-').next().unwrap_or(lang);
-    match base {
-        "ar" => "Arabic",
-        "en" => "English",
-        "fr" => "French",
-        "de" => "German",
-        "es" => "Spanish",
-        "it" => "Italian",
-        "pt" => "Portuguese",
-        "ru" => "Russian",
-        "zh" => "Chinese",
-        "ja" => "Japanese",
-        "ko" => "Korean",
-        "tr" => "Turkish",
-        "nl" => "Dutch",
-        "pl" => "Polish",
-        "sv" => "Swedish",
-        "fa" => "Persian",
-        "he" => "Hebrew",
-        "ur" => "Urdu",
-        "id" => "Indonesian",
-        "hi" => "Hindi",
-        _ => lang,
-    }
+    isolang::Language::from_639_1(base)
+        .map(|l| l.to_name().to_string())
+        .unwrap_or_else(|| lang.to_string())
 }
 
 // ── matching ──────────────────────────────────────────────────────────────────
@@ -432,4 +403,78 @@ pub fn merge_single(
     }
 
     Ok(output_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_sub_name_handles_youtube_variant_codes() {
+        assert_eq!(
+            parse_sub_name("My Video - ar.srt"),
+            ("My Video".to_string(), "ar".to_string())
+        );
+        assert_eq!(
+            parse_sub_name("My Video - ar-orig.srt"),
+            ("My Video".to_string(), "ar-orig".to_string())
+        );
+        assert_eq!(
+            parse_sub_name("My Video - en-orig.vtt"),
+            ("My Video".to_string(), "en-orig".to_string())
+        );
+        assert_eq!(
+            parse_sub_name("My Video - zh-Hans.srt"),
+            ("My Video".to_string(), "zh-Hans".to_string())
+        );
+        assert_eq!(
+            parse_sub_name("My Video - zh-Hant.srt"),
+            ("My Video".to_string(), "zh-Hant".to_string())
+        );
+        assert_eq!(
+            parse_sub_name("My Video - es-419.srt"),
+            ("My Video".to_string(), "es-419".to_string())
+        );
+        assert_eq!(
+            parse_sub_name("My Video - pt-PT.srt"),
+            ("My Video".to_string(), "pt-PT".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_sub_name_falls_back_to_und_for_unrecognizable_names() {
+        assert_eq!(
+            parse_sub_name("random_filename.srt"),
+            ("random_filename".to_string(), "und".to_string())
+        );
+    }
+
+    #[test]
+    fn variant_codes_still_resolve_to_correct_iso_and_display_name() {
+        assert_eq!(to_iso639_2("ar-orig"), "ara");
+        assert_eq!(lang_display_name("ar-orig"), "Arabic");
+        assert_eq!(to_iso639_2("zh-Hans"), "zho");
+        assert_eq!(lang_display_name("zh-Hant"), "Chinese");
+    }
+
+    #[test]
+    fn previously_unsupported_languages_now_resolve_via_isolang() {
+        // These were NOT in the old hand-written ~20-language table and used
+        // to silently fall back to the raw code as both the ISO tag and the
+        // display name. isolang covers the full ISO 639 set instead.
+        assert_eq!(to_iso639_2("sw"), "swa");
+        assert_eq!(lang_display_name("sw"), "Swahili");
+        assert_eq!(to_iso639_2("th"), "tha");
+        assert_eq!(lang_display_name("th"), "Thai");
+        assert_eq!(to_iso639_2("vi"), "vie");
+        assert_eq!(lang_display_name("vi"), "Vietnamese");
+        assert_eq!(to_iso639_2("uk"), "ukr");
+        assert_eq!(lang_display_name("uk"), "Ukrainian");
+    }
+
+    #[test]
+    fn unrecognized_language_code_falls_back_to_itself() {
+        assert_eq!(to_iso639_2("zzz-orig"), "zzz");
+        assert_eq!(lang_display_name("totally-unknown"), "totally-unknown");
+    }
 }
