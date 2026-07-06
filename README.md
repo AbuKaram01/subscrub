@@ -117,10 +117,34 @@ subscrub itself doesn't call Deno directly — it's a dependency of `yt-dlp`, wh
 |Arch Linux|`sudo pacman -S yt-dlp`|`sudo pacman -S ffmpeg`|
 |openSUSE|`sudo zypper install yt-dlp`|`sudo zypper install ffmpeg`|
 
-A few notes:
+**Note:** on Fedora, plain `dnf install ffmpeg` (or the `ffmpeg-free` package) is enough for subscrub — merging only stream-copies your existing video/audio and re-encodes the subtitle track, so the patented codecs behind RPM Fusion's full build aren't needed.
 
-- Distro-packaged `yt-dlp` can lag behind upstream. If YouTube extraction starts failing, update with `yt-dlp -U` (or `pip install -U yt-dlp`) before filing a bug.
-- On Fedora, plain `dnf install ffmpeg` (or the `ffmpeg-free` package) is enough for subscrub — merging only stream-copies your existing video/audio and re-encodes the subtitle track, so the patented codecs behind RPM Fusion's full build aren't needed.
+### Getting a newer yt-dlp
+
+Distro-packaged `yt-dlp` can lag behind upstream, and YouTube extraction can start failing as a result. If that happens, first try:
+
+```bash
+yt-dlp -U
+```
+
+If that doesn't fix it (or your distro's package is too old to begin with), install the latest version yourself with `pipx` instead. Avoid plain `pip install yt-dlp` — most distros now block `pip` from installing outside a virtual environment ([PEP 668](https://peps.python.org/pep-0668/)); `pipx` is the supported way to install Python CLI tools like `yt-dlp` system-wide without hitting that.
+
+|Platform|pipx|
+|---|---|
+|Debian / Ubuntu|`sudo apt install pipx`|
+|Fedora / RHEL|`sudo dnf install pipx`|
+|Arch Linux|`sudo pacman -S python-pipx`|
+|openSUSE|`sudo zypper install python3-pipx`|
+
+```bash
+pipx install yt-dlp
+```
+
+Later on, to update it to the newest version:
+
+```bash
+pipx upgrade yt-dlp
+```
 
 ### Installing Deno
 
